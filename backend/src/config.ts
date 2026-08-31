@@ -17,6 +17,9 @@ export const config = {
   buildDate: process.env.BUILD_DATE || "unknown",
   // Access password protection (empty = disabled)
   accessPassword: process.env.ACCESS_PASSWORD || "",
+  // Bundled Apple SAP signer (loopback-only internal service)
+  sapSignerBinary: process.env.SAP_SIGNER_BINARY || "",
+  sapSignerAddress: process.env.SAP_SIGNER_ADDRESS || "127.0.0.1:54726",
 };
 
 export const accessPasswordHash = config.accessPassword

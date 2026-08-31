@@ -1,115 +1,80 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { buildPlist } from "../../src/apple/plist";
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  defaultAuthURL,
   fetchBag,
-  normalizeAuthURL,
-} from "../../src/apple/bag";
+  parseBagConfiguration,
+  SAPConfigurationError,
+} from '../../src/apple/bag';
+import { buildPlist } from '../../src/apple/plist';
 
-describe("apple/bag", () => {
+const validBag = {
+  urlBag: {
+    authenticateAccount:
+      'https://buy.itunes.apple.com/WebObjects/MZFinance.woa/wa/authenticate',
+    'sign-sap-setup':
+      'https://fpinit.itunes.apple.com/v1/signSapSetup/legacy',
+    'sign-sap-setup-cert':
+      'https://s.mzstatic.com/sap/setupCert.plist',
+    'sign-sap-version': '200',
+  },
+};
+
+describe('apple/bag', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("parses authenticateAccount from urlBag", async () => {
-    const xml = buildPlist({
+  it('parses the complete SAP configuration advertised by Apple', () => {
+    expect(parseBagConfiguration(buildPlist(validBag))).toEqual({
+      authURL:
+        'https://buy.itunes.apple.com/WebObjects/MZFinance.woa/wa/authenticate',
+      sap: {
+        setupURL:
+          'https://fpinit.itunes.apple.com/v1/signSapSetup/legacy',
+        certificateURL: 'https://s.mzstatic.com/sap/setupCert.plist',
+        version: 200,
+      },
+    });
+  });
+
+  it('accepts the loc-prefixed SAP keys used by current Apple bags', () => {
+    const bag = {
       urlBag: {
         authenticateAccount:
-          "https://buy.itunes.apple.com/WebObjects/MZFinance.woa/wa/authenticate",
+          'https://buy.itunes.apple.com/WebObjects/MZFinance.woa/wa/authenticate',
+        'loc-sign-sap-setup':
+          'https://fpinit.itunes.apple.com/v1/signSapSetup/legacy',
+        'loc-sign-sap-setup-cert':
+          'https://s.mzstatic.com/sap/setupCert.plist',
+        'loc-sign-sap-version': '200',
       },
-    });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        text: async () => xml,
-      }),
-    );
-
-    const result = await fetchBag("aabbccddeeff");
-
-    expect(result.authURL).toBe(
-      "https://buy.itunes.apple.com/WebObjects/MZFinance.woa/wa/authenticate",
-    );
+    };
+    expect(parseBagConfiguration(buildPlist(bag)).sap.version).toBe(200);
   });
 
-  it("normalizes a native auth endpoint at the plist root to the /fast/ path", async () => {
-    const xml = buildPlist({
-      authenticateAccount: "https://auth.itunes.apple.com/auth/v1/native",
-    });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        text: async () => xml,
-      }),
-    );
-
-    const result = await fetchBag("aabbccddeeff");
-
-    expect(result.authURL).toBe(
-      "https://auth.itunes.apple.com/auth/v1/native/fast/",
-    );
+  it('rejects missing or untrusted SAP endpoints', () => {
+    expect(() =>
+      parseBagConfiguration(
+        buildPlist({
+          urlBag: {
+            ...validBag.urlBag,
+            'sign-sap-setup': 'https://example.com/sign',
+          },
+        }),
+      ),
+    ).toThrow(SAPConfigurationError);
   });
 
-  it("falls back when authenticateAccount is missing", async () => {
-    const xml = buildPlist({
-      urlBag: {
-        Ghostrider: "YES",
-      },
+  it('requests the bag with a canonical uppercase GUID', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () => buildPlist(validBag),
     });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: true,
-        text: async () => xml,
-      }),
+    vi.stubGlobal('fetch', fetchMock);
+
+    await fetchBag('aa:bb:cc:dd:ee:ff');
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      '/api/bag?guid=AABBCCDDEEFF',
     );
-
-    const result = await fetchBag("aabbccddeeff");
-
-    expect(result.authURL).toBe(defaultAuthURL);
-  });
-
-  it("falls back when bag proxy returns non-OK", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({
-        ok: false,
-        status: 502,
-        statusText: "Bad Gateway",
-        json: async () => ({ error: "upstream failed" }),
-      }),
-    );
-
-    const result = await fetchBag("aabbccddeeff");
-
-    expect(result.authURL).toBe(defaultAuthURL);
-  });
-
-  describe("normalizeAuthURL", () => {
-    it("appends /fast/ to a bare native auth endpoint", () => {
-      expect(
-        normalizeAuthURL("https://auth.itunes.apple.com/auth/v1/native"),
-      ).toBe("https://auth.itunes.apple.com/auth/v1/native/fast/");
-    });
-
-    it("adds the trailing slash when /fast is already present", () => {
-      expect(
-        normalizeAuthURL("https://auth.itunes.apple.com/auth/v1/native/fast"),
-      ).toBe("https://auth.itunes.apple.com/auth/v1/native/fast/");
-    });
-
-    it("is idempotent on an already-normalized endpoint", () => {
-      expect(
-        normalizeAuthURL("https://auth.itunes.apple.com/auth/v1/native/fast/"),
-      ).toBe("https://auth.itunes.apple.com/auth/v1/native/fast/");
-    });
-
-    it("leaves legacy endpoints on other hosts unchanged", () => {
-      const legacy =
-        "https://buy.itunes.apple.com/WebObjects/MZFinance.woa/wa/authenticate";
-      expect(normalizeAuthURL(legacy)).toBe(legacy);
-    });
   });
 });

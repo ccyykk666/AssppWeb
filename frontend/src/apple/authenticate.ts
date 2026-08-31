@@ -1,9 +1,17 @@
-import type { Account, Cookie } from "../types";
-import { appleRequest } from "./request";
-import { buildPlist, parsePlist } from "./plist";
-import { extractAndMergeCookies } from "./cookies";
-import { fetchBag, defaultAuthURL } from "./bag";
-import i18n from "../i18n";
+import i18n from '../i18n';
+import { fetchBag, type SAPConfiguration } from './bag';
+import { normalizeDeviceId } from './config';
+import { extractAndMergeCookies } from './cookies';
+import { buildPlist, parsePlist } from './plist';
+import { appleRequest, type AppleResponse } from './request';
+import { signSAPAction } from './sapSigner';
+import type { Account, Cookie } from '../types';
+
+const INVALID_CREDENTIALS_FAILURE = '-5000';
+const BAD_LOGIN_MESSAGE = 'MZFinance.BadLogin.Configurator_message';
+const AUTHENTICATION_PATH = '/WebObjects/MZFinance.woa/wa/authenticate';
+const MAX_REDIRECTS = 3;
+const MAX_TRANSPORT_ATTEMPTS = 3;
 
 export class AuthenticationError extends Error {
   constructor(
@@ -11,8 +19,74 @@ export class AuthenticationError extends Error {
     public readonly codeRequired: boolean = false,
   ) {
     super(message);
-    this.name = "AuthenticationError";
+    this.name = 'AuthenticationError';
   }
+}
+
+function validAuthenticationRedirect(value: string): URL | undefined {
+  try {
+    const url = new URL(value);
+    const appleHost =
+      url.hostname === 'buy.itunes.apple.com' ||
+      /^p\d+-buy\.itunes\.apple\.com$/.test(url.hostname);
+    if (
+      url.protocol !== 'https:' ||
+      !appleHost ||
+      url.pathname !== AUTHENTICATION_PATH
+    ) {
+      return undefined;
+    }
+    return url;
+  } catch {
+    return undefined;
+  }
+}
+
+function transientAuthenticationStatus(status: number): boolean {
+  return status === 204 || status === 404 || status >= 500;
+}
+
+function sleep(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function sendSignedAuthenticationRequest(
+  host: string,
+  path: string,
+  guid: string,
+  sap: SAPConfiguration,
+  body: string,
+  cookies: Cookie[],
+): Promise<AppleResponse> {
+  let lastResponse: AppleResponse | undefined;
+  for (let attempt = 1; attempt <= MAX_TRANSPORT_ATTEMPTS; attempt++) {
+    let signature: string;
+    try {
+      signature = await signSAPAction(guid, sap, body);
+    } catch {
+      throw new AuthenticationError(i18n.t('errors.auth.sapUnavailable'));
+    }
+
+    const response = await appleRequest({
+      method: 'POST',
+      host,
+      path,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-Apple-ActionSignature': signature,
+      },
+      body,
+      cookies,
+    });
+    lastResponse = response;
+    if (!transientAuthenticationStatus(response.status)) {
+      return response;
+    }
+    if (attempt < MAX_TRANSPORT_ATTEMPTS) {
+      await sleep(attempt * 250);
+    }
+  }
+  return lastResponse as AppleResponse;
 }
 
 export async function authenticate(
@@ -20,141 +94,142 @@ export async function authenticate(
   password: string,
   code?: string,
   existingCookies?: Cookie[],
-  deviceId: string = "",
+  deviceId: string = '',
 ): Promise<Account> {
+  const guid = normalizeDeviceId(deviceId);
+  let bag;
+  try {
+    bag = await fetchBag(guid);
+  } catch {
+    throw new AuthenticationError(i18n.t('errors.auth.sapUnavailable'));
+  }
+  const endpoint = new URL(bag.authURL);
+  endpoint.searchParams.set('guid', guid);
+
+  let requestHost = endpoint.hostname;
+  let requestPath = `${endpoint.pathname}${endpoint.search}`;
   let cookies: Cookie[] = existingCookies ? [...existingCookies] : [];
-  let storeFront = "";
-  let lastError: Error | null = null;
+  let redirectCount = 0;
+  let redirected = false;
+  let attempt = 1;
 
-  const defaultAuthEndpoint = new URL(defaultAuthURL);
-  defaultAuthEndpoint.searchParams.set("guid", deviceId);
-  let requestHost = defaultAuthEndpoint.hostname;
-  let requestPath = `${defaultAuthEndpoint.pathname}${defaultAuthEndpoint.search}`;
+  while (attempt <= 4) {
+    const requestAttempt = redirected ? 1 : attempt;
+    const body = buildPlist({
+      appleId: email,
+      attempt: String(requestAttempt),
+      guid,
+      password: `${password}${(code ?? '').replace(/\s/g, '')}`,
+      rmp: '0',
+      why: 'signIn',
+    });
 
-  const bag = await fetchBag(deviceId);
-  const authEndpoint = new URL(bag.authURL);
-  authEndpoint.searchParams.set("guid", deviceId);
-  requestHost = authEndpoint.hostname;
-  requestPath = `${authEndpoint.pathname}${authEndpoint.search}`;
+    const response = await sendSignedAuthenticationRequest(
+      requestHost,
+      requestPath,
+      guid,
+      bag.sap,
+      body,
+      cookies,
+    );
+    cookies = extractAndMergeCookies(response.rawHeaders, cookies);
 
-  let currentAttempt = 0;
-  let redirectAttempt = 0;
-
-  while (currentAttempt < 2 && redirectAttempt <= 3) {
-    currentAttempt++;
-
-    try {
-      const body: Record<string, string> = {
-        appleId: email,
-        attempt: code ? "2" : "4",
-        guid: deviceId,
-        password: code ? `${password}${code}` : password,
-        rmp: "0",
-        why: "signIn",
-      };
-
-      const plistBody = buildPlist(body);
-
-      const headers: Record<string, string> = {
-        "Content-Type": "application/x-apple-plist",
-      };
-
-      const response = await appleRequest({
-        method: "POST",
-        host: requestHost,
-        path: requestPath,
-        headers,
-        body: plistBody,
-        cookies,
-      });
-
-      cookies = extractAndMergeCookies(response.rawHeaders, cookies);
-
-      // Read store front
-      const storeHeader = response.headers["x-set-apple-store-front"];
-      if (storeHeader) {
-        const parts = storeHeader.split("-");
-        if (parts[0]) {
-          storeFront = parts[0];
-        }
+    if (response.status === 302) {
+      const location = response.headers.location;
+      const redirect = location
+        ? validAuthenticationRedirect(location)
+        : undefined;
+      if (!redirect) {
+        throw new AuthenticationError(i18n.t('errors.auth.invalidRedirect'));
       }
-
-      // Read pod
-      const podHeader = response.headers["pod"];
-      const pod = podHeader || undefined;
-
-      // Handle redirect. The native /fast auth host can answer with 301 as
-      // well as the usual 302, so follow the full set of redirect statuses.
-      if ([301, 302, 303, 307, 308].includes(response.status)) {
-        const location = response.headers["location"];
-        if (!location) {
-          throw new Error(i18n.t("errors.auth.redirectLocation"));
-        }
-        const url = new URL(location);
-        requestHost = url.hostname;
-        requestPath = url.pathname + url.search;
-        currentAttempt--;
-        redirectAttempt++;
-        continue;
+      redirectCount++;
+      if (redirectCount > MAX_REDIRECTS) {
+        throw new AuthenticationError(i18n.t('errors.auth.tooManyRedirects'));
       }
-
-      // Handle non-plist responses (e.g. 403 with empty body)
-      if (!response.body.trim()) {
-        throw new Error(
-          i18n.t("errors.auth.emptyBody", { status: response.status }),
-        );
-      }
-
-      const dict = parsePlist(response.body) as Record<string, any>;
-
-      // Check for 2FA requirement
-      if (
-        dict.failureType === "" &&
-        !code &&
-        dict.customerMessage === "MZFinance.BadLogin.Configurator_message"
-      ) {
-        throw new AuthenticationError(
-          i18n.t("errors.auth.requiresVerification"),
-          true,
-        );
-      }
-
-      const failureMessage =
-        (dict.dialog as Record<string, any>)?.explanation ??
-        dict.customerMessage;
-
-      const accountInfo = dict.accountInfo as Record<string, any>;
-      if (!accountInfo) {
-        throw new Error(
-          failureMessage ?? i18n.t("errors.auth.missingAccountInfo"),
-        );
-      }
-
-      const address = accountInfo.address as Record<string, any>;
-      if (!address) {
-        throw new Error(failureMessage ?? i18n.t("errors.auth.missingAddress"));
-      }
-
-      const account: Account = {
-        email,
-        password,
-        appleId: (accountInfo.appleId as string) ?? "",
-        store: storeFront,
-        firstName: (address.firstName as string) ?? "",
-        lastName: (address.lastName as string) ?? "",
-        passwordToken: (dict.passwordToken as string) ?? "",
-        directoryServicesIdentifier: String(dict.dsPersonId ?? ""),
-        cookies,
-        deviceIdentifier: deviceId,
-        pod,
-      };
-
-      return account;
-    } catch (e) {
-      if (e instanceof AuthenticationError) throw e;
-      lastError = e instanceof Error ? e : new Error(String(e));
+      requestHost = redirect.hostname;
+      requestPath = `${redirect.pathname}${redirect.search}`;
+      redirected = true;
+      continue;
     }
+
+    if (!response.body.trim()) {
+      throw new AuthenticationError(
+        i18n.t('errors.auth.emptyBody', { status: response.status }),
+      );
+    }
+
+    let result: Record<string, any>;
+    try {
+      result = parsePlist(response.body) as Record<string, any>;
+    } catch {
+      throw new AuthenticationError(
+        i18n.t('errors.auth.invalidResponse', { status: response.status }),
+      );
+    }
+
+    const failureType = String(result.failureType ?? '');
+    const customerMessage = String(result.customerMessage ?? '');
+    if (attempt === 1 && failureType === INVALID_CREDENTIALS_FAILURE) {
+      attempt++;
+      continue;
+    }
+    if (
+      failureType === '' &&
+      !code &&
+      customerMessage === BAD_LOGIN_MESSAGE
+    ) {
+      throw new AuthenticationError(
+        i18n.t('errors.auth.requiresVerification'),
+        true,
+      );
+    }
+
+    const dialog = result.dialog as Record<string, any> | undefined;
+    const failureMessage =
+      (dialog?.explanation as string | undefined) ||
+      customerMessage ||
+      undefined;
+    if (failureType) {
+      throw new AuthenticationError(
+        failureMessage ?? i18n.t('errors.auth.unknownReason'),
+      );
+    }
+
+    const accountInfo = result.accountInfo as Record<string, any> | undefined;
+    const passwordToken = String(result.passwordToken ?? '');
+    const dsid = String(result.dsPersonId ?? '');
+    if (
+      response.status !== 200 ||
+      !accountInfo ||
+      !passwordToken ||
+      !dsid
+    ) {
+      throw new AuthenticationError(
+        failureMessage ?? i18n.t('errors.auth.missingAccountInfo'),
+      );
+    }
+
+    const storeHeader = response.headers['x-set-apple-store-front'];
+    if (!storeHeader) {
+      throw new AuthenticationError(i18n.t('errors.auth.missingStoreFront'));
+    }
+    const address =
+      (accountInfo.address as Record<string, any> | undefined) ?? {};
+
+    return {
+      email,
+      password,
+      appleId: String(accountInfo.appleId ?? email),
+      store: storeHeader.split('-')[0] ?? '',
+      firstName: String(address.firstName ?? ''),
+      lastName: String(address.lastName ?? ''),
+      passwordToken,
+      directoryServicesIdentifier: dsid,
+      cookies,
+      deviceIdentifier: guid,
+      pod: response.headers.pod || undefined,
+    };
   }
 
-  throw lastError ?? new Error(i18n.t("errors.auth.unknownReason"));
+  throw new AuthenticationError(i18n.t('errors.auth.unknownReason'));
 }

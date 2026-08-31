@@ -143,7 +143,12 @@ export function generateDeviceId(): string {
   crypto.getRandomValues(bytes);
   return Array.from(bytes)
     .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+    .join("")
+    .toUpperCase();
+}
+
+export function normalizeDeviceId(value: string): string {
+  return value.replace(/[\s:-]/g, "").toUpperCase();
 }
 
 export function storeAPIHost(pod?: string): string {
@@ -167,17 +172,19 @@ export function volumeStoreEndpoint(
   pod: string | undefined,
   deviceId: string,
 ): StoreDownloadEndpoint {
+  const guid = normalizeDeviceId(deviceId);
   return {
     host: storeAPIHost(pod),
-    path: `/WebObjects/MZFinance.woa/wa/volumeStoreDownloadProduct?guid=${deviceId}`,
+    path: `/WebObjects/MZFinance.woa/wa/volumeStoreDownloadProduct?guid=${guid}`,
     externalVersionIdKey: "externalVersionId",
   };
 }
 
 export function redownloadEndpoint(deviceId: string): StoreDownloadEndpoint {
+  const guid = normalizeDeviceId(deviceId);
   return {
     host: "downloaddispatch.itunes.apple.com",
-    path: `/r/redownload?guid=${deviceId}`,
+    path: `/r/redownload?guid=${guid}`,
     externalVersionIdKey: "appExtVrsId",
   };
 }

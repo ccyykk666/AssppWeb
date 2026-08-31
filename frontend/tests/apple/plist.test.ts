@@ -68,5 +68,17 @@ describe("apple/plist", () => {
       expect(parsed.email).toBe("test@test.com");
       expect(parsed.value).toBe("hello world");
     });
+
+    it("should parse Apple's Document/Protocol plist envelope", () => {
+      const xml = `<Document><Protocol><plist version="1.0"><dict><key>dsPersonId</key><string>123</string></dict></plist></Protocol></Document>`;
+
+      expect(parsePlist(xml)).toEqual({ dsPersonId: "123" });
+    });
+
+    it("should parse a bare plist dictionary", () => {
+      const xml = `<dict><key>status</key><integer>0</integer></dict>`;
+
+      expect(parsePlist(xml)).toEqual({ status: 0 });
+    });
   });
 });

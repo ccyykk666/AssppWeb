@@ -4,11 +4,21 @@ A web-based tool for acquiring and installing iOS apps outside the App Store. Au
 
 ![preview](./resources/preview.png)
 
-## Zero-Trust Architecture
+## Hybrid Client-side Architecture
 
-AssppWeb uses a zero-trust design where the server **never sees your Apple credentials**. All Apple API communication happens directly in your browser via WebAssembly (libcurl.js with Mbed TLS 1.3). The server only acts as a blind TCP relay (Wisp protocol) and handles IPA compilation from public CDN downloads.
+Most Apple API communication still happens directly in the browser through
+WebAssembly (libcurl.js with Mbed TLS 1.3) and the server's blind Wisp relay.
+Apple now requires an SAP `X-Apple-ActionSignature` for authentication, so this
+fork bundles a private SAP signer in the same container. Only the exact login
+request body is sent to that loopback-only signer; it is kept in memory for the
+request and is never intentionally logged or persisted. Search, purchase, and
+download traffic continues to use browser-side Apple TLS.
 
-> **⚠️ Important Security Notice:** There are no official Asspp Web instances. Use any public instance at your own risk. While the backend cannot read your encrypted traffic, a malicious host could serve a modified frontend to capture your credentials before encryption. Therefore, **do not blindly trust public instances**. We strongly recommend self-hosting your own instance or using one provided by a trusted partner. Always verify the SSL certificate and ensure you are connecting to a secure, authentic endpoint.
+> **⚠️ Important Security Notice:** During login, the Apple ID, password, and
+> optional verification code pass through the self-hosted server's memory so
+> the SAP signature can be produced. Use only a server you control and trust.
+> A malicious host can also modify the frontend, so do not enter credentials on
+> an unknown public instance. Always use HTTPS and verify the domain.
 
 **恳请所有转发项目的博主对自己的受众进行网络安全技术科普。要有哪个不拎清的大头儿子搞出事情来都够我们喝一壶的。**
 
@@ -16,9 +26,9 @@ AssppWeb uses a zero-trust design where the server **never sees your Apple crede
 
 ### Deploy to Cloudflare
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/Lakr233/AssppWeb&apiTokenTmpl=%5B%7B%22key%22%3A%22workers_scripts%22%2C%22type%22%3A%22write%22%7D%2C%7B%22key%22%3A%22containers%22%2C%22type%22%3A%22write%22%7D%2C%7B%22key%22%3A%22cloudchamber%22%2C%22type%22%3A%22write%22%7D%5D&apiTokenName=AssppWeb%20Deploy)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/ccyykk666/AssppWeb&apiTokenTmpl=%5B%7B%22key%22%3A%22workers_scripts%22%2C%22type%22%3A%22write%22%7D%2C%7B%22key%22%3A%22containers%22%2C%22type%22%3A%22write%22%7D%2C%7B%22key%22%3A%22cloudchamber%22%2C%22type%22%3A%22write%22%7D%5D&apiTokenName=AssppWeb%20Deploy)
 
-This uses Cloudflare Workers + Containers with the published image `ghcr.io/lakr233/assppweb:latest`.
+This builds this fork's Dockerfile with Cloudflare Workers + Containers.
 
 Requirements:
 
@@ -35,7 +45,7 @@ If your build log fails at `Deploy a container application` with `Unauthorized`,
 <details>
 <summary>Click to show Railway deployment instructions</summary>
 
-1. Go to [railway.com/new/image](https://railway.com/new/image) → enter `ghcr.io/lakr233/assppweb:latest`
+1. Go to [railway.com/new/image](https://railway.com/new/image) → enter `ghcr.io/ccyykk666/assppweb:latest`
 2. In service **Settings**, set **Healthcheck Path** to `/api/settings` and deploy
 3. Right-click the service → **Attach volume** → mount path: `/data`
 4. In **Variables**, set `DATA_DIR` = `/data` and deploy
@@ -59,9 +69,13 @@ If your build log fails at `Deploy a container application` with `Unauthorized`,
 **Setup Docker Compose**
 
 ```bash
-curl -O https://raw.githubusercontent.com/Lakr233/AssppWeb/main/compose.yml
+curl -O https://raw.githubusercontent.com/ccyykk666/AssppWeb/main/compose.yml
 docker compose up -d
 ```
+
+The first Apple login may take longer while the signer downloads and verifies
+the required Apple SAP assets and Unicorn runtime. They are cached under the
+mounted `/data` volume for later logins. No additional public port is opened.
 
 **Environment Variables**
 
@@ -91,7 +105,7 @@ asspp.example.com { reverse_proxy 127.0.0.1:8080 }
 
 **⚠️ Make Sure WebSocket Works**
 
-AssppWeb relies on the Wisp protocol over WebSocket (`/wisp/`) for its zero-trust architecture. Ensure your reverse proxy or CDN (e.g., Nginx, Cloudflare) is configured to allow WebSocket connections, otherwise the app will fail to communicate with Apple servers.
+AssppWeb relies on the Wisp protocol over WebSocket (`/wisp/`) for browser-side Apple traffic. Ensure your reverse proxy or CDN (e.g., Nginx, Cloudflare) is configured to allow WebSocket connections, otherwise the app will fail to communicate with Apple servers.
 
 </details>
 
@@ -109,7 +123,8 @@ MIT License. See [LICENSE](LICENSE) for details.
 
 For projects that was stolen and used heavily:
 
-- [ipatool](https://github.com/majd/ipatool)
+- [ipatool](https://github.com/majd/ipatool) — the bundled signer directly uses
+  its official SAP implementation pinned to commit `d5d0b56faf64`
 - [Asspp](https://github.com/Lakr233/Asspp)
 
 For friends who helped with testing and feedback:

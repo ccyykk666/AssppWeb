@@ -1,76 +1,127 @@
-import { authHeaders } from "../api/client";
-import { parsePlist } from "./plist";
+import { authHeaders } from '../api/client';
+import { normalizeDeviceId } from './config';
+import { parsePlist } from './plist';
+
+export interface SAPConfiguration {
+  setupURL: string;
+  certificateURL: string;
+  version: number;
+}
 
 export interface BagOutput {
   authURL: string;
+  sap: SAPConfiguration;
 }
 
-export const defaultAuthURL =
-  "https://auth.itunes.apple.com/auth/v1/native/fast/";
-
-const NATIVE_AUTH_HOST = "auth.itunes.apple.com";
-
-// The bag advertises the native auth endpoint without the /fast/ sub-path that
-// the login flow requires; the no-trailing-slash variant 301s to an HTML page.
-// Legacy endpoints on other hosts pass through unchanged.
-export function normalizeAuthURL(rawURL: string): string {
-  let url: URL;
-  try {
-    url = new URL(rawURL);
-  } catch {
-    return rawURL;
+export class SAPConfigurationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SAPConfigurationError';
   }
-  if (url.hostname !== NATIVE_AUTH_HOST) {
-    return rawURL;
-  }
-  let path = url.pathname.replace(/\/+$/, "");
-  if (!path.endsWith("/fast")) {
-    path += "/fast";
-  }
-  url.pathname = `${path}/`;
-  return url.toString();
 }
 
-// Fetches the bag via the backend proxy.
-// The backend fetches it using Node.js native HTTPS.
-// The bag response is public data (Apple service URLs, no credentials).
-export async function fetchBag(deviceId: string): Promise<BagOutput> {
+function bagValue(
+  root: Record<string, any>,
+  urlBag: Record<string, any>,
+  key: string,
+): unknown {
+  return urlBag[key] ?? root[key] ?? urlBag[`loc-${key}`] ?? root[`loc-${key}`];
+}
+
+function validAuthenticationURL(value: string): boolean {
   try {
-    const resp = await fetch(`/api/bag?guid=${encodeURIComponent(deviceId)}`, {
-      headers: authHeaders(),
-    });
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({ error: resp.statusText }));
-      console.warn(
-        `[Bag] Proxy request failed, using default auth endpoint: ${err.error || `HTTP ${resp.status}`}`,
-      );
-      return { authURL: defaultAuthURL };
-    }
-
-    const xml = await resp.text();
-    const dict = parsePlist(xml) as Record<string, any>;
-
-    // authenticateAccount used to live inside the urlBag dict; newer bag
-    // responses move it to the plist root, so prefer the root and fall back.
-    const urlBag = dict.urlBag as Record<string, any> | undefined;
-    const authURL =
-      (dict.authenticateAccount as string | undefined) ??
-      (urlBag?.authenticateAccount as string | undefined);
-
-    if (!authURL) {
-      console.warn(
-        "[Bag] authenticateAccount URL not found in bag, using default auth endpoint",
-      );
-      return { authURL: defaultAuthURL };
-    }
-
-    return { authURL: normalizeAuthURL(authURL) };
-  } catch (error) {
-    console.warn(
-      `[Bag] Failed to fetch/parse bag, using default auth endpoint: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
+    const url = new URL(value);
+    const appleHost =
+      url.hostname === 'buy.itunes.apple.com' ||
+      /^p\d+-buy\.itunes\.apple\.com$/.test(url.hostname);
+    return (
+      url.protocol === 'https:' &&
+      appleHost &&
+      url.pathname === '/WebObjects/MZFinance.woa/wa/authenticate'
     );
-    return { authURL: defaultAuthURL };
+  } catch {
+    return false;
   }
+}
+
+function validSAPURL(value: string, host: string, path: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === 'https:' &&
+      url.hostname === host &&
+      (path.endsWith('/')
+        ? url.pathname.startsWith(path)
+        : url.pathname === path)
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function parseBagConfiguration(xml: string): BagOutput {
+  const root = parsePlist(xml) as Record<string, any>;
+  const urlBag = (root.urlBag as Record<string, any> | undefined) ?? {};
+  const authURL = bagValue(root, urlBag, 'authenticateAccount');
+  const setupURL = bagValue(root, urlBag, 'sign-sap-setup');
+  const certificateURL = bagValue(root, urlBag, 'sign-sap-setup-cert');
+  const versionValue = bagValue(root, urlBag, 'sign-sap-version');
+  const version = Number(versionValue);
+
+  if (typeof authURL !== 'string' || !validAuthenticationURL(authURL)) {
+    throw new SAPConfigurationError(
+      'Apple Bag did not provide a supported authentication endpoint',
+    );
+  }
+  if (
+    typeof setupURL !== 'string' ||
+    !validSAPURL(
+      setupURL,
+      'fpinit.itunes.apple.com',
+      '/v1/signSapSetup/',
+    )
+  ) {
+    throw new SAPConfigurationError(
+      'Apple Bag did not provide a supported SAP setup endpoint',
+    );
+  }
+  if (
+    typeof certificateURL !== 'string' ||
+    !validSAPURL(
+      certificateURL,
+      's.mzstatic.com',
+      '/sap/setupCert.plist',
+    )
+  ) {
+    throw new SAPConfigurationError(
+      'Apple Bag did not provide a supported SAP certificate endpoint',
+    );
+  }
+  if (!Number.isInteger(version) || version !== 200) {
+    throw new SAPConfigurationError(
+      `Apple Bag advertised unsupported SAP version ${String(versionValue)}`,
+    );
+  }
+
+  return {
+    authURL,
+    sap: {
+      setupURL,
+      certificateURL,
+      version,
+    },
+  };
+}
+
+export async function fetchBag(deviceId: string): Promise<BagOutput> {
+  const guid = normalizeDeviceId(deviceId);
+  const response = await fetch(`/api/bag?guid=${encodeURIComponent(guid)}`, {
+    headers: authHeaders(),
+  });
+  if (!response.ok) {
+    throw new SAPConfigurationError(
+      `Apple Bag request failed with HTTP ${response.status}`,
+    );
+  }
+  return parseBagConfiguration(await response.text());
 }

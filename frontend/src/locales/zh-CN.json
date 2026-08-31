@@ -428,6 +428,11 @@
       "requiresVerification": "验证需要双重认证代码。如果没有弹出验证码，请尝试在 https://account.apple.com 登录以触发提示，然后在双重认证代码字段中填写该代码。",
       "redirectLocation": "无法获取重定向地址",
       "emptyBody": "认证失败：服务器返回 HTTP {{status}} 且响应体为空",
+      "sapUnavailable": "SAP 签名服务不可用，请稍后重试",
+      "invalidRedirect": "Apple 返回了不安全或不受支持的认证重定向",
+      "tooManyRedirects": "Apple 认证重定向次数过多",
+      "invalidResponse": "Apple 返回 HTTP {{status}}，但响应不是有效的 plist",
+      "missingStoreFront": "认证响应中缺少 Apple Store Front",
       "missingAccountInfo": "响应中缺少 accountInfo",
       "missingAddress": "响应中缺少 address",
       "unknownReason": "未知原因导致认证失败"

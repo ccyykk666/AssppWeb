@@ -428,6 +428,11 @@
       "requiresVerification": "2ファクタ認証コードが必要です。ポップアップが出ない場合は、https://account.apple.com でサインインしてアラートをトリガーし、コード欄に入力してください。",
       "redirectLocation": "リダイレクト先を取得できませんでした",
       "emptyBody": "認証失敗: サーバーが空のボディでHTTP {{status}}を返しました",
+      "sapUnavailable": "SAP 署名サービスを利用できません。しばらくしてから再試行してください。",
+      "invalidRedirect": "Apple が安全でない、または未対応の認証リダイレクトを返しました",
+      "tooManyRedirects": "Apple 認証のリダイレクト回数が多すぎます",
+      "invalidResponse": "Apple は HTTP {{status}} を返しましたが、有効な plist ではありません",
+      "missingStoreFront": "認証応答に Apple Store Front がありません",
       "missingAccountInfo": "レスポンスに accountInfo がありません",
       "missingAddress": "レスポンスに address がありません",
       "unknownReason": "不明な理由により認証に失敗しました"

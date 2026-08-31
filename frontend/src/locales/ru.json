@@ -428,6 +428,11 @@
       "requiresVerification": "Для аутентификации требуется код проверки. Если окно не появилось, войдите на https://account.apple.com, чтобы получить код, и введите его в поле.",
       "redirectLocation": "Не удалось получить адрес перенаправления",
       "emptyBody": "Ошибка аутентификации: сервер вернул HTTP {{status}} с пустым телом",
+      "sapUnavailable": "Сервис подписи SAP недоступен. Повторите попытку позже.",
+      "invalidRedirect": "Apple вернула небезопасное или неподдерживаемое перенаправление аутентификации",
+      "tooManyRedirects": "Слишком много перенаправлений аутентификации Apple",
+      "invalidResponse": "Apple вернула HTTP {{status}}, но ответ не является корректным plist",
+      "missingStoreFront": "В ответе аутентификации отсутствует Apple Store Front",
       "missingAccountInfo": "В ответе отсутствует accountInfo",
       "missingAddress": "В ответе отсутствует address",
       "unknownReason": "Аутентификация не удалась по неизвестной причине"

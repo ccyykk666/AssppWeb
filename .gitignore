@@ -129,6 +129,9 @@ BuildTools/Package.resolved
 # Docker data directory
 /data/
 
+# Local SAP signer build artifact
+/sap-signer/asspp-sap-signer.exe
+
 # Developer-specific xcconfig (required but gitignored)
 Configuration/Developer.xcconfig
 

@@ -11,13 +11,17 @@
 
 - `backend/` — Node.js/Express server (TypeScript, ESM)
 - `frontend/` — React SPA (TypeScript, Vite, Tailwind CSS)
+- `sap-signer/` — loopback-only Go SAP signing service, built into the container
 - `e2e/` — Playwright E2E tests (pnpm)
 - `references/ApplePackage/` — Swift reference implementation (source of truth)
 - Multi-stage Docker build (single container serves both)
 
-## Architecture — Zero-Trust
+## Architecture — Browser TLS with a Private SAP Signer
 
-The server is a blind TCP proxy. It NEVER sees Apple credentials.
+The server remains a blind TCP proxy for normal Apple traffic. Authentication
+is the explicit exception: Apple requires a SAP `X-Apple-ActionSignature`, so
+the browser sends the exact login request body to a loopback-only signer in the
+same container.
 
 ```
 ┌─ Browser (Client) ─────────────────────────────────┐
@@ -25,12 +29,12 @@ The server is a blind TCP proxy. It NEVER sees Apple credentials.
 │    passwordToken, DSID, deviceIdentifier, pod       │
 │                                                      │
 │  Apple Protocol (libcurl.js WASM + Mbed TLS 1.3):   │
-│    1. Bag fetch → backend proxy → resolve auth URL   │
-│       (fallback to default auth endpoint if missing)  │
-│    2. Authenticate → get token, cookies, pod         │
-│    3. Purchase → acquire license                     │
-│    4. Download info → get CDN URL + SINFs + metadata │
-│    5. Version listing/lookup                         │
+│    1. Bag fetch → backend proxy → resolve auth + SAP │
+│    2. Exact login body → /api/sap/sign → signature  │
+│    3. Signed authenticate → get token, cookies, pod │
+│    4. Purchase → acquire license                     │
+│    5. Download info → get CDN URL + SINFs + metadata │
+│    6. Version listing/lookup                         │
 │                                                      │
 │  TLS 1.3 encrypted via Wisp protocol over WebSocket  │
 └──────────────────────┬───────────────────────────────┘
@@ -41,7 +45,12 @@ The server is a blind TCP proxy. It NEVER sees Apple credentials.
 │                                                      │
 │  Bag proxy: GET /api/bag?guid=<id>                   │
 │    - Fetches init.itunes.apple.com/bag.xml via HTTPS │
-│    - Returns public Apple service URLs (no creds)    │
+│    - Returns public Apple auth and SAP configuration │
+│                                                      │
+│  SAP signer: POST /api/sap/sign                       │
+│    - Node starts a token-protected loopback Go service│
+│    - Receives the exact login body only for signing  │
+│    - Never log, persist, or include that body in errors│
 │                                                      │
 │  After client obtains download info:                 │
 │    Client POSTs: { downloadURL, sinfs, metadata }    │
@@ -55,7 +64,12 @@ The server is a blind TCP proxy. It NEVER sees Apple credentials.
 └──────────────────────────────────────────────────────┘
 ```
 
-**Key invariant**: The server NEVER sees Apple credentials. All Apple TLS terminates at the browser via libcurl.js WASM (Mbed TLS 1.3). The server only receives public CDN URLs and non-secret metadata for IPA compilation. The bag proxy (`/api/bag`) only returns public Apple service URLs — no credentials pass through it.
+**Key invariant**: Apple TLS still terminates in the browser, except for SAP
+setup and action signing. The exact authentication body is transiently visible
+to the self-hosted backend and signer and must never be logged or persisted.
+The signer must stay loopback-only and its internal bearer token must never be
+returned to the browser. Password tokens, cookies, purchase requests, and
+download requests remain browser-side.
 
 ## Reference Implementation
 
@@ -137,8 +151,8 @@ The backend proxies the bag endpoint via `GET /api/bag?guid=<deviceId>` using No
 - IndexedDB for credential storage (via `idb`)
 - `libcurl.js` (WASM) for browser-side TLS 1.3 via Mbed TLS — connects through Wisp protocol
 - `appleRequest()` in `frontend/src/apple/request.ts` wraps `libcurl.fetch` for all Apple API calls and forces HTTP/1.1 (`_libcurl_http_version: 1.1`)
-- Bag endpoint (`frontend/src/apple/bag.ts`) uses backend proxy (`/api/bag`) and falls back to `https://buy.itunes.apple.com/WebObjects/MZFinance.woa/wa/authenticate` when `authenticateAccount` is missing or bag fetch fails
-- Authentication (`frontend/src/apple/authenticate.ts`) resolves bag endpoint, then sets `guid` via URL query manipulation to avoid duplicate/malformed query parameters
+- Bag endpoint (`frontend/src/apple/bag.ts`) requires valid Apple authentication and SAP configuration; unsigned fallback authentication is forbidden
+- Authentication (`frontend/src/apple/authenticate.ts`) signs the exact serialized request body before each request and accepts only validated Apple pod redirects
 - Plist build/parse (`frontend/src/apple/plist.ts`) uses native XML builder and browser-native `DOMParser`
 - Cookie helper (`frontend/src/apple/cookies.ts`) — `extractAndMergeCookies(rawHeaders, existingCookies)` replaces the repeated extract-and-merge pattern across all Apple protocol files
 
@@ -181,7 +195,7 @@ The backend proxies the bag endpoint via `GET /api/bag?guid=<deviceId>` using No
 
 ### Account Hash Is Public
 
-`accountHash` is a SHA-256 of the account email. It is treated as **public, non-secret data** — it identifies which account owns a download but does not grant any privileged access. No authentication is bound to it. This is by design: the server is a blind proxy and does not manage user sessions.
+`accountHash` is a SHA-256 of the account email. It is treated as **public, non-secret data** — it identifies which account owns a download but does not grant any privileged access. No authentication is bound to it.
 
 ### Trusted Sources
 
@@ -190,7 +204,7 @@ The backend proxies the bag endpoint via `GET /api/bag?guid=<deviceId>` using No
 
 ### Browser as Security Boundary
 
-Credentials (passwords, `passwordToken`, cookies) stored in IndexedDB are protected by the browser's same-origin policy. Encrypting them at rest would be security theater — the decryption key would also live in JS. The threat model assumes the browser environment is trusted; if an attacker has XSS, they can exfiltrate credentials regardless of at-rest encryption.
+Credentials (passwords, `passwordToken`, cookies) stored in IndexedDB are protected by the browser's same-origin policy. Encrypting them at rest would be security theater — the decryption key would also live in JS. The threat model assumes the browser and self-hosted server are trusted. The password and optional 2FA code pass through server memory during SAP signing; password tokens and cookies must not.
 
 ### Backend Does Not Reflect Request Headers
 
@@ -223,14 +237,15 @@ cd frontend && npx vitest run   # jsdom environment with fake-indexeddb
 ```bash
 cd e2e && pnpm test                            # Local (requires Docker on port 8080)
 docker compose --profile test run --rm playwright  # Docker-based
-bash e2e/docker-test.sh                        # Full: build + test + zero-trust verify
+bash e2e/docker-test.sh                        # Full Docker build + E2E verification
 ```
 
 E2E tests import from `./fixtures` instead of `@playwright/test`.
 
 WebSocket proxy tests use `location.host` to derive URLs dynamically, so they work both locally (`localhost:8080`) and in Docker (`asspp:8080`).
 
-Real-account Docker verification (2026-02-22): authentication succeeds through Wisp, and backend logs contain only connection/stream metadata (no Apple credentials, password tokens, or cookies).
+Any real-account verification must confirm that logs contain neither the login
+body nor Apple credentials, password tokens, cookies, or internal signer token.
 
 E2E tests cover:
 
@@ -263,7 +278,7 @@ docker compose --profile test run --rm playwright
 
 This runs Playwright inside the official `mcr.microsoft.com/playwright` image, connecting to the app container via Docker internal DNS (`http://asspp:8080`). The `asspp` service has a healthcheck so the test container waits until the app is ready.
 
-The `e2e/docker-test.sh` script automates the full flow: build, test, and verify zero-trust by scanning backend logs for credential leaks.
+The `e2e/docker-test.sh` script automates the full flow and scans backend logs for credential leaks.
 
 ## Interface Design System
 

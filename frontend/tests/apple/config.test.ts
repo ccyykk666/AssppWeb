@@ -3,6 +3,7 @@ import {
   userAgent,
   countryCodeMap,
   generateDeviceId,
+  normalizeDeviceId,
   storeAPIHost,
   purchaseAPIHost,
   countryToStoreId,
@@ -58,7 +59,7 @@ describe("apple/config", () => {
   describe("generateDeviceId", () => {
     it("should generate a hex string", () => {
       const id = generateDeviceId();
-      expect(id).toMatch(/^[0-9a-f]+$/);
+      expect(id).toMatch(/^[0-9A-F]+$/);
     });
 
     it("should be 12 characters (6 bytes hex)", () => {
@@ -77,6 +78,12 @@ describe("apple/config", () => {
       expect(id).not.toContain(":");
       expect(id).not.toContain("-");
       expect(id).not.toContain(" ");
+    });
+  });
+
+  describe("normalizeDeviceId", () => {
+    it("should strip common separators and use Apple-compatible uppercase", () => {
+      expect(normalizeDeviceId("aa:bb-cc dd:ee-ff")).toBe("AABBCCDDEEFF");
     });
   });
 
@@ -134,7 +141,7 @@ describe("apple/config", () => {
       const ep = volumeStoreEndpoint("42", "aabbccddeeff");
       expect(ep.host).toBe("p42-buy.itunes.apple.com");
       expect(ep.path).toBe(
-        "/WebObjects/MZFinance.woa/wa/volumeStoreDownloadProduct?guid=aabbccddeeff",
+        "/WebObjects/MZFinance.woa/wa/volumeStoreDownloadProduct?guid=AABBCCDDEEFF",
       );
       expect(ep.externalVersionIdKey).toBe("externalVersionId");
     });
@@ -142,7 +149,7 @@ describe("apple/config", () => {
     it("redownload targets downloaddispatch with the appExtVrsId key", () => {
       const ep = redownloadEndpoint("aabbccddeeff");
       expect(ep.host).toBe("downloaddispatch.itunes.apple.com");
-      expect(ep.path).toBe("/r/redownload?guid=aabbccddeeff");
+      expect(ep.path).toBe("/r/redownload?guid=AABBCCDDEEFF");
       expect(ep.externalVersionIdKey).toBe("appExtVrsId");
     });
 

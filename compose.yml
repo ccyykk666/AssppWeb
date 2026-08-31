@@ -1,6 +1,6 @@
 services:
   asspp:
-    image: ghcr.io/lakr233/assppweb:latest
+    image: ghcr.io/ccyykk666/assppweb:latest
     ports:
       - "8080:8080"
     volumes:
@@ -8,6 +8,7 @@ services:
     environment:
       - DATA_DIR=/data
       - PORT=8080
+      - AUTO_CLEANUP_DAYS=7
       # - DOWNLOAD_THREADS=8
       # - ACCESS_PASSWORD=your_password_here
     restart: unless-stopped
