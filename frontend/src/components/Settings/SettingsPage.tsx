@@ -5,6 +5,7 @@ import Modal from "../common/Modal";
 import { useAccountsStore } from "../../store/accounts";
 import { useToastStore } from "../../store/toast";
 import { apiGet } from "../../api/client";
+import { clearVersionMetadataCache } from '../../apple/versionMetadataCache';
 import { encryptData, decryptData } from "../../utils/crypto";
 import { countryCodeMap } from "../../apple/config";
 import type { Account } from "../../types";
@@ -400,10 +401,11 @@ export default function SettingsPage() {
           </div>
 
           <button
-            onClick={() => {
+            onClick={async () => {
               if (!confirm(t("settings.data.confirm"))) return;
               localStorage.clear();
               indexedDB.deleteDatabase("asspp-accounts");
+              await clearVersionMetadataCache();
               addToast(t("settings.data.cleared"), "success");
               setTimeout(() => {
                 window.location.href = "/";

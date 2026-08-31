@@ -84,6 +84,9 @@
       "load": "載入版本",
       "loading": "載入中...",
       "loadDetails": "載入詳情",
+      "resolvingVersion": "正在取得版本號...",
+      "detailsUnavailable": "無法取得版本詳細資訊",
+      "retryDetails": "重試取得詳細資訊",
       "download": "下載",
       "downloading": "下載中..."
     }
@@ -151,6 +154,7 @@
     "checkingUpdates": "檢查中...",
     "checkUpdatesStarted": "正在背景檢查更新...",
     "checkUpdatesCompleted": "更新檢查完成。發現並正在更新 {{count}} 個安裝包。",
+    "checkUpdatesNoUpdates": "更新檢查完成。暫無更新。",
     "checkUpdatesDesc": "為防止觸發速率限制，我們正在逐一檢查應用程式。這可能需要幾分鐘時間。",
     "status": {
       "all": "全部",

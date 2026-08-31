@@ -1,4 +1,10 @@
-import { useState, useEffect, useMemo } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useParams, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import PageContainer from "../Layout/PageContainer";
@@ -7,10 +13,95 @@ import { useAccounts } from "../../hooks/useAccounts";
 import { useDownloadAction } from "../../hooks/useDownloadAction";
 import { listVersions } from "../../apple/versionFinder";
 import { storeIdToCountry } from "../../apple/config";
-import { getVersionMetadata } from "../../apple/versionLookup";
+import { resolveVersionMetadata } from '../../apple/versionMetadataResolver';
 import { getErrorMessage } from "../../utils/error";
 import { useToastStore } from "../../store/toast";
 import type { Software, VersionMetadata } from "../../types";
+
+interface VersionRowProps {
+  versionId: string;
+  metadata?: VersionMetadata;
+  isLoading: boolean;
+  hasError: boolean;
+  isDownloading: boolean;
+  disableDownload: boolean;
+  onLoadMetadata: (versionId: string) => void;
+  onDownload: (versionId: string) => void;
+}
+
+function VersionRow({
+  versionId,
+  metadata,
+  isLoading,
+  hasError,
+  isDownloading,
+  disableDownload,
+  onLoadMetadata,
+  onDownload,
+}: VersionRowProps) {
+  const { t } = useTranslation();
+  const rowRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (metadata || isLoading || hasError) return;
+    const element = rowRef.current;
+    if (!element || typeof IntersectionObserver === 'undefined') {
+      onLoadMetadata(versionId);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          onLoadMetadata(versionId);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '240px 0px' },
+    );
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [hasError, isLoading, metadata, onLoadMetadata, versionId]);
+
+  return (
+    <div ref={rowRef} className="p-4 flex items-center justify-between gap-4">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-gray-900 dark:text-white">
+          {metadata
+            ? `v${metadata.displayVersion}`
+            : hasError
+              ? t('search.versions.detailsUnavailable')
+              : t('search.versions.resolvingVersion')}
+        </p>
+        {metadata && (
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            {new Date(metadata.releaseDate).toLocaleDateString()}
+          </p>
+        )}
+        <p className="text-xs text-gray-400 dark:text-gray-500">
+          ID: {versionId}
+        </p>
+        {hasError && !isLoading && (
+          <button
+            onClick={() => onLoadMetadata(versionId)}
+            className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 py-1 transition-colors"
+          >
+            {t('search.versions.retryDetails')}
+          </button>
+        )}
+      </div>
+      <button
+        onClick={() => onDownload(versionId)}
+        disabled={disableDownload}
+        className="px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
+      >
+        {isDownloading
+          ? t('search.versions.downloading')
+          : t('search.versions.download')}
+      </button>
+    </div>
+  );
+}
 
 export default function VersionHistory() {
   const { appId } = useParams<{ appId: string }>();
@@ -38,6 +129,11 @@ export default function VersionHistory() {
   >({});
   const [loading, setLoading] = useState(false);
   const [loadingMeta, setLoadingMeta] = useState<Record<string, boolean>>({});
+  const [metadataErrors, setMetadataErrors] = useState<Record<string, boolean>>(
+    {},
+  );
+  const versionMetaRef = useRef<Record<string, VersionMetadata>>({});
+  const pendingMetaRef = useRef(new Set<string>());
   const [downloadingVersion, setDownloadingVersion] = useState<string | null>(
     null,
   );
@@ -67,19 +163,30 @@ export default function VersionHistory() {
     }
   }
 
-  async function handleLoadMeta(versionId: string) {
-    if (!account || !app || versionMeta[versionId]) return;
+  const handleLoadMeta = useCallback(async (versionId: string) => {
+    if (
+      !account ||
+      !app ||
+      versionMetaRef.current[versionId] ||
+      pendingMetaRef.current.has(versionId)
+    ) {
+      return;
+    }
+    pendingMetaRef.current.add(versionId);
     setLoadingMeta((prev) => ({ ...prev, [versionId]: true }));
+    setMetadataErrors((prev) => ({ ...prev, [versionId]: false }));
     try {
-      const result = await getVersionMetadata(account, app, versionId);
+      const result = await resolveVersionMetadata(account, app, versionId);
+      versionMetaRef.current[versionId] = result.metadata;
       setVersionMeta((prev) => ({ ...prev, [versionId]: result.metadata }));
       await updateAccount({ ...account, cookies: result.updatedCookies });
     } catch {
-      // Silently fail for individual version metadata
+      setMetadataErrors((prev) => ({ ...prev, [versionId]: true }));
     } finally {
+      pendingMetaRef.current.delete(versionId);
       setLoadingMeta((prev) => ({ ...prev, [versionId]: false }));
     }
-  }
+  }, [account, app, updateAccount]);
 
   async function handleDownloadVersion(versionId: string) {
     if (!account || !app) return;
@@ -154,51 +261,21 @@ export default function VersionHistory() {
 
         {versions.length > 0 && (
           <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 divide-y divide-gray-200 dark:divide-gray-800">
-            {versions.map((versionId) => {
-              const meta = versionMeta[versionId];
-              const isLoadingMeta = loadingMeta[versionId];
-              const isDownloading = downloadingVersion === versionId;
-
-              return (
-                <div
-                  key={versionId}
-                  className="p-4 flex items-center justify-between"
-                >
-                  <div>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">
-                      {meta ? `v${meta.displayVersion}` : `ID: ${versionId}`}
-                    </p>
-                    {meta && (
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {new Date(meta.releaseDate).toLocaleDateString()}
-                      </p>
-                    )}
-                    {!meta && !isLoadingMeta && (
-                      <button
-                        onClick={() => handleLoadMeta(versionId)}
-                        className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 py-1 transition-colors"
-                      >
-                        {t("search.versions.loadDetails")}
-                      </button>
-                    )}
-                    {isLoadingMeta && (
-                      <span className="text-xs text-gray-400 dark:text-gray-500">
-                        {t("search.versions.loading")}
-                      </span>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => handleDownloadVersion(versionId)}
-                    disabled={isDownloading || downloadingVersion !== null}
-                    className="px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                  >
-                    {isDownloading
-                      ? t("search.versions.downloading")
-                      : t("search.versions.download")}
-                  </button>
-                </div>
-              );
-            })}
+            {versions.map((versionId) => (
+              <VersionRow
+                key={versionId}
+                versionId={versionId}
+                metadata={versionMeta[versionId]}
+                isLoading={Boolean(loadingMeta[versionId])}
+                hasError={Boolean(metadataErrors[versionId])}
+                isDownloading={downloadingVersion === versionId}
+                disableDownload={
+                  downloadingVersion === versionId || downloadingVersion !== null
+                }
+                onLoadMetadata={handleLoadMeta}
+                onDownload={handleDownloadVersion}
+              />
+            ))}
           </div>
         )}
       </div>

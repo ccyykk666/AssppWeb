@@ -59,6 +59,7 @@ export interface DownloadOutput {
 export interface VersionMetadata {
   displayVersion: string;
   releaseDate: string;
+  releaseDateSource?: 'plist' | 'archive';
 }
 
 export interface DownloadTask {

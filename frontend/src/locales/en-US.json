@@ -84,6 +84,9 @@
       "load": "Load Versions",
       "loading": "Loading...",
       "loadDetails": "Load details",
+      "resolvingVersion": "Fetching version number...",
+      "detailsUnavailable": "Version details unavailable",
+      "retryDetails": "Retry details",
       "download": "Download",
       "downloading": "Downloading..."
     }
@@ -151,6 +154,7 @@
     "checkingUpdates": "Checking...",
     "checkUpdatesStarted": "Checking for updates in background...",
     "checkUpdatesCompleted": "Update check complete. Found and updating {{count}} packages.",
+    "checkUpdatesNoUpdates": "Update check complete. No updates available.",
     "checkUpdatesDesc": "To prevent rate limits, we're checking apps one by one. This may take a few minutes.",
     "status": {
       "all": "All",

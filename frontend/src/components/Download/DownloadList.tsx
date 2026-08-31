@@ -131,7 +131,12 @@ export default function DownloadList() {
       await delay(500);
       if (!cancelCheckRef.current) {
         setCheckingAll(false);
-        addToast(t("downloads.checkUpdatesCompleted", { count }), "success");
+        addToast(
+          count === 0
+            ? t('downloads.checkUpdatesNoUpdates')
+            : t('downloads.checkUpdatesCompleted', { count }),
+          'success',
+        );
       }
     }
   }

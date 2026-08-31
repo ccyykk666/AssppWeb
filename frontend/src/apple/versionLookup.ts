@@ -1,12 +1,13 @@
-import type { Account, Software, VersionMetadata } from "../types";
 import { appleRequest } from "./request";
 import { buildPlist, parsePlist } from "./plist";
 import { extractAndMergeCookies } from "./cookies";
+import { apiPost } from '../api/client';
 import {
   RETRYABLE_FAILURE_TYPE,
   redownloadEndpoint,
   volumeStoreEndpoint,
 } from "./config";
+import type { Account, Software, VersionMetadata } from "../types";
 
 export async function getVersionMetadata(
   account: Account,
@@ -86,31 +87,20 @@ export async function getVersionMetadata(
     }
 
     const item = songList[0];
-    const itemMetadata = item.metadata as Record<string, any>;
-    if (!itemMetadata) {
-      throw new Error("Missing metadata");
+    const downloadURL = item.URL as string | undefined;
+    if (!downloadURL) {
+      throw new Error('Missing download URL');
     }
 
-    const bundleShortVersionString =
-      itemMetadata.bundleShortVersionString as string;
-    if (!bundleShortVersionString) {
-      throw new Error("Missing bundleShortVersionString");
-    }
-
-    const rawReleaseDate = itemMetadata.releaseDate;
-    if (!rawReleaseDate) {
-      throw new Error("Missing releaseDate");
-    }
-    const releaseDate =
-      rawReleaseDate instanceof Date
-        ? rawReleaseDate.toISOString()
-        : String(rawReleaseDate);
+    // Apple reuses the application's original App Store release date in this
+    // response for every historical version. Read the real package metadata
+    // from a few HTTP ranges instead of trusting that stale field.
+    const metadata = await apiPost<VersionMetadata>('/api/version-metadata', {
+      downloadURL,
+    });
 
     return {
-      metadata: {
-        displayVersion: bundleShortVersionString,
-        releaseDate,
-      },
+      metadata,
       updatedCookies: cookies,
     };
   }

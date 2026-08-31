@@ -84,6 +84,9 @@
       "load": "加载版本",
       "loading": "加载中...",
       "loadDetails": "加载详情",
+      "resolvingVersion": "正在获取版本号...",
+      "detailsUnavailable": "版本详情获取失败",
+      "retryDetails": "重试获取详情",
       "download": "下载",
       "downloading": "下载中..."
     }
@@ -151,6 +154,7 @@
     "checkingUpdates": "检查中...",
     "checkUpdatesStarted": "正在后台检查更新...",
     "checkUpdatesCompleted": "更新检查完成。发现并正在更新 {{count}} 个安装包。",
+    "checkUpdatesNoUpdates": "更新检查完成。暂无更新。",
     "checkUpdatesDesc": "为防止触发速率限制，我们正在逐一检查应用。这可能需要几分钟时间。",
     "status": {
       "all": "全部",

@@ -84,6 +84,9 @@
       "load": "バージョンを読み込む",
       "loading": "読み込み中...",
       "loadDetails": "詳細を読み込む",
+      "resolvingVersion": "バージョン番号を取得中...",
+      "detailsUnavailable": "バージョンの詳細を取得できません",
+      "retryDetails": "詳細を再取得",
       "download": "ダウンロード",
       "downloading": "ダウンロード中..."
     }
@@ -151,6 +154,7 @@
     "checkingUpdates": "確認中...",
     "checkUpdatesStarted": "バックグラウンドでアップデートを確認しています...",
     "checkUpdatesCompleted": "アップデートの確認が完了しました。{{count}} 個のパッケージを更新します。",
+    "checkUpdatesNoUpdates": "アップデートの確認が完了しました。更新はありません。",
     "checkUpdatesDesc": "レート制限を防ぐため、アプリを1つずつ確認しています。これには数分かかる場合があります。",
     "status": {
       "all": "すべて",
