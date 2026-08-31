@@ -11,11 +11,16 @@ import PageContainer from "../Layout/PageContainer";
 import AppIcon from "../common/AppIcon";
 import { useAccounts } from "../../hooks/useAccounts";
 import { useDownloadAction } from "../../hooks/useDownloadAction";
-import { listVersions } from "../../apple/versionFinder";
-import { storeIdToCountry } from "../../apple/config";
-import { resolveVersionMetadata } from '../../apple/versionMetadataResolver';
-import { getErrorMessage } from "../../utils/error";
 import { useToastStore } from "../../store/toast";
+import { listVersions } from "../../apple/versionFinder";
+import {
+  cancelQueuedVersionMetadata,
+  resolveVersionMetadata,
+  setQueuedVersionMetadataPriority,
+  VersionMetadataRequestCancelled,
+} from "../../apple/versionMetadataResolver";
+import { getErrorMessage } from "../../utils/error";
+import { storeIdToCountry } from "../../apple/config";
 import type { Software, VersionMetadata } from "../../types";
 
 interface VersionRowProps {
@@ -25,7 +30,9 @@ interface VersionRowProps {
   hasError: boolean;
   isDownloading: boolean;
   disableDownload: boolean;
-  onLoadMetadata: (versionId: string) => void;
+  onLoadMetadata: (versionId: string, priority?: 0 | 1) => void;
+  onSetPriority: (versionId: string, priority: 0 | 1) => void;
+  onCancelMetadata: (versionId: string) => void;
   onDownload: (versionId: string) => void;
 }
 
@@ -37,58 +44,76 @@ function VersionRow({
   isDownloading,
   disableDownload,
   onLoadMetadata,
+  onSetPriority,
+  onCancelMetadata,
   onDownload,
 }: VersionRowProps) {
   const { t } = useTranslation();
   const rowRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (metadata || isLoading || hasError) return;
+    if (metadata || hasError) return;
     const element = rowRef.current;
-    if (!element || typeof IntersectionObserver === 'undefined') {
-      onLoadMetadata(versionId);
+    if (!element || typeof IntersectionObserver === "undefined") {
+      onLoadMetadata(versionId, 0);
       return;
     }
+    const scrollRoot = element.closest("[data-page-scroll-container]");
 
-    const observer = new IntersectionObserver(
+    const nearbyObserver = new IntersectionObserver(
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting)) {
-          onLoadMetadata(versionId);
-          observer.disconnect();
+          onLoadMetadata(versionId, 1);
+        } else {
+          onCancelMetadata(versionId);
         }
       },
-      { rootMargin: '240px 0px' },
+      { root: scrollRoot, rootMargin: "240px 0px" },
     );
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [hasError, isLoading, metadata, onLoadMetadata, versionId]);
+    const visibleObserver = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        onLoadMetadata(versionId, 0);
+        onSetPriority(versionId, 0);
+      } else {
+        onSetPriority(versionId, 1);
+      }
+    }, { root: scrollRoot });
+
+    nearbyObserver.observe(element);
+    visibleObserver.observe(element);
+    return () => {
+      nearbyObserver.disconnect();
+      visibleObserver.disconnect();
+      onCancelMetadata(versionId);
+    };
+  }, [
+    hasError,
+    metadata,
+    onCancelMetadata,
+    onLoadMetadata,
+    onSetPriority,
+    versionId,
+  ]);
 
   return (
     <div ref={rowRef} className="p-4 flex items-center justify-between gap-4">
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-gray-900 dark:text-white">
-          {metadata
-            ? `v${metadata.displayVersion}`
-            : hasError
-              ? t('search.versions.detailsUnavailable')
-              : t('search.versions.resolvingVersion')}
-        </p>
-        {metadata && (
-          <p className="text-xs text-gray-500 dark:text-gray-400">
-            {new Date(metadata.releaseDate).toLocaleDateString()}
-          </p>
-        )}
-        <p className="text-xs text-gray-400 dark:text-gray-500">
+      <div className="min-w-0 flex-1">
+        <p className="h-5 truncate text-sm font-medium text-gray-900 dark:text-white">
           ID: {versionId}
+          {metadata ? ` (v${metadata.displayVersion})` : ""}
         </p>
-        {hasError && !isLoading && (
-          <button
-            onClick={() => onLoadMetadata(versionId)}
-            className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 py-1 transition-colors"
-          >
-            {t('search.versions.retryDetails')}
-          </button>
-        )}
+        <div className="h-5 flex items-center text-xs text-gray-500 dark:text-gray-400">
+          {metadata ? (
+            new Date(metadata.releaseDate).toLocaleDateString()
+          ) : hasError && !isLoading ? (
+            <button
+              onClick={() => onLoadMetadata(versionId, 0)}
+              className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+            >
+              {t("search.versions.retryDetails")}
+            </button>
+          ) : null}
+        </div>
       </div>
       <button
         onClick={() => onDownload(versionId)}
@@ -96,8 +121,8 @@ function VersionRow({
         className="px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
       >
         {isDownloading
-          ? t('search.versions.downloading')
-          : t('search.versions.download')}
+          ? t("search.versions.downloading")
+          : t("search.versions.download")}
       </button>
     </div>
   );
@@ -134,6 +159,8 @@ export default function VersionHistory() {
   );
   const versionMetaRef = useRef<Record<string, VersionMetadata>>({});
   const pendingMetaRef = useRef(new Set<string>());
+  const cancelledPendingMetaRef = useRef(new Set<string>());
+  const retryPendingMetaRef = useRef(new Map<string, 0 | 1>());
   const [downloadingVersion, setDownloadingVersion] = useState<string | null>(
     null,
   );
@@ -163,30 +190,71 @@ export default function VersionHistory() {
     }
   }
 
-  const handleLoadMeta = useCallback(async (versionId: string) => {
-    if (
-      !account ||
-      !app ||
-      versionMetaRef.current[versionId] ||
-      pendingMetaRef.current.has(versionId)
-    ) {
-      return;
+  const handleLoadMeta = useCallback(
+    async (versionId: string, priority: 0 | 1 = 0) => {
+      if (!account || !app || versionMetaRef.current[versionId]) return;
+      if (pendingMetaRef.current.has(versionId)) {
+        setQueuedVersionMetadataPriority(account, app, versionId, priority);
+        if (cancelledPendingMetaRef.current.has(versionId)) {
+          const retryPriority = retryPendingMetaRef.current.get(versionId);
+          retryPendingMetaRef.current.set(
+            versionId,
+            retryPriority === undefined
+              ? priority
+              : Math.min(retryPriority, priority) as 0 | 1,
+          );
+        }
+        return;
+      }
+
+      pendingMetaRef.current.add(versionId);
+      cancelledPendingMetaRef.current.delete(versionId);
+      setLoadingMeta((prev) => ({ ...prev, [versionId]: true }));
+      setMetadataErrors((prev) => ({ ...prev, [versionId]: false }));
+      try {
+        const result = await resolveVersionMetadata(
+          account,
+          app,
+          versionId,
+          priority,
+        );
+        versionMetaRef.current[versionId] = result.metadata;
+        setVersionMeta((prev) => ({ ...prev, [versionId]: result.metadata }));
+        await updateAccount({ ...account, cookies: result.updatedCookies });
+      } catch (error) {
+        if (!(error instanceof VersionMetadataRequestCancelled)) {
+          setMetadataErrors((prev) => ({ ...prev, [versionId]: true }));
+        }
+      } finally {
+        const retryPriority = retryPendingMetaRef.current.get(versionId);
+        retryPendingMetaRef.current.delete(versionId);
+        cancelledPendingMetaRef.current.delete(versionId);
+        pendingMetaRef.current.delete(versionId);
+        setLoadingMeta((prev) => ({ ...prev, [versionId]: false }));
+        if (retryPriority !== undefined) {
+          void handleLoadMeta(versionId, retryPriority);
+        }
+      }
+    },
+    [account, app, updateAccount],
+  );
+
+  const handleSetMetaPriority = useCallback((
+    versionId: string,
+    priority: 0 | 1,
+  ) => {
+    if (!account || !app) return;
+    setQueuedVersionMetadataPriority(account, app, versionId, priority);
+  }, [account, app]);
+
+  const handleCancelMeta = useCallback((versionId: string) => {
+    if (!account || !app) return;
+    if (pendingMetaRef.current.has(versionId)) {
+      cancelledPendingMetaRef.current.add(versionId);
     }
-    pendingMetaRef.current.add(versionId);
-    setLoadingMeta((prev) => ({ ...prev, [versionId]: true }));
-    setMetadataErrors((prev) => ({ ...prev, [versionId]: false }));
-    try {
-      const result = await resolveVersionMetadata(account, app, versionId);
-      versionMetaRef.current[versionId] = result.metadata;
-      setVersionMeta((prev) => ({ ...prev, [versionId]: result.metadata }));
-      await updateAccount({ ...account, cookies: result.updatedCookies });
-    } catch {
-      setMetadataErrors((prev) => ({ ...prev, [versionId]: true }));
-    } finally {
-      pendingMetaRef.current.delete(versionId);
-      setLoadingMeta((prev) => ({ ...prev, [versionId]: false }));
-    }
-  }, [account, app, updateAccount]);
+    retryPendingMetaRef.current.delete(versionId);
+    cancelQueuedVersionMetadata(account, app, versionId);
+  }, [account, app]);
 
   async function handleDownloadVersion(versionId: string) {
     if (!account || !app) return;
@@ -273,6 +341,8 @@ export default function VersionHistory() {
                   downloadingVersion === versionId || downloadingVersion !== null
                 }
                 onLoadMetadata={handleLoadMeta}
+                onSetPriority={handleSetMetaPriority}
+                onCancelMetadata={handleCancelMeta}
                 onDownload={handleDownloadVersion}
               />
             ))}
