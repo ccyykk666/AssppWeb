@@ -9,13 +9,12 @@ import {
 } from "./config";
 import type { Account, Software, VersionMetadata } from "../types";
 
-export async function lookupVersionMetadata(
+export async function getVersionMetadata(
   account: Account,
   app: Software,
   versionId: string,
 ): Promise<{
   metadata: VersionMetadata;
-  downloadURL: string;
   updatedCookies: typeof account.cookies;
 }> {
   const deviceId = account.deviceIdentifier;
@@ -93,29 +92,18 @@ export async function lookupVersionMetadata(
       throw new Error('Missing download URL');
     }
 
-    const itemMetadata = item.metadata as Record<string, unknown> | undefined;
-    const displayVersion = String(
-      itemMetadata?.bundleShortVersionString ?? '',
-    ).trim();
-    if (!displayVersion) {
-      throw new Error('Missing bundle short version string');
-    }
+    // Apple reuses the application's original App Store release date in this
+    // response for every historical version. Read the real package metadata
+    // from a few HTTP ranges instead of trusting that stale field.
+    const metadata = await apiPost<VersionMetadata>('/api/version-metadata', {
+      downloadURL,
+    });
 
     return {
-      metadata: { displayVersion, releaseDate: '' },
-      downloadURL,
+      metadata,
       updatedCookies: cookies,
     };
   }
 
   throw new Error("Too many redirects");
-}
-
-export async function readAccurateVersionMetadata(
-  downloadURL: string,
-): Promise<VersionMetadata> {
-  // Apple reuses the application's original App Store release date in the
-  // purchase response. Reading the package stays as a separate, slower stage
-  // so it never blocks the version number returned above.
-  return apiPost<VersionMetadata>('/api/version-metadata', { downloadURL });
 }
