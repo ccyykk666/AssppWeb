@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { QRCodeSVG } from "qrcode.react";
@@ -20,6 +20,18 @@ import { getAccountContext } from "../../utils/toast";
 import { isNewerVersion } from "../../utils/version";
 import type { Software } from "../../types";
 
+function formatBytes(bytes: number): string {
+  if (bytes <= 0) return '0 B';
+
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const unitIndex = Math.min(
+    Math.floor(Math.log(bytes) / Math.log(1024)),
+    units.length - 1,
+  );
+  const value = bytes / 1024 ** unitIndex;
+  return `${value.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`;
+}
+
 export default function PackageDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -35,6 +47,16 @@ export default function PackageDetail() {
   const [latestApp, setLatestApp] = useState<Software | null>(null);
   const [availableVersions, setAvailableVersions] = useState<string[]>([]);
   const [selectedVersion, setSelectedVersion] = useState<string>("");
+  const [ipaDownload, setIpaDownload] = useState({
+    active: false,
+    loaded: 0,
+    total: 0,
+  });
+  const ipaDownloadAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => ipaDownloadAbortRef.current?.abort();
+  }, []);
 
   const task = tasks.find((t) => t.id === id);
 
@@ -150,6 +172,82 @@ export default function PackageDetail() {
       navigate("/downloads");
     } catch {
       addToast(t("downloads.package.updateFailed"), "error");
+    }
+  }
+
+  function handleCancelIpaDownload() {
+    ipaDownloadAbortRef.current?.abort();
+    ipaDownloadAbortRef.current = null;
+    setIpaDownload({ active: false, loaded: 0, total: 0 });
+  }
+
+  async function handleDownloadIpa() {
+    const controller = new AbortController();
+    ipaDownloadAbortRef.current = controller;
+    setIpaDownload({ active: true, loaded: 0, total: 0 });
+    toastAction('toast.title.downloadIpaStarted');
+
+    try {
+      const res = await fetch(
+        `/api/packages/${task.id}/file?accountHash=${encodeURIComponent(task.accountHash)}`,
+        {
+          headers: authHeaders(),
+          signal: controller.signal,
+        },
+      );
+      if (!res.ok) throw new Error('Download failed');
+
+      const total = Number(res.headers.get('content-length')) || 0;
+      setIpaDownload((current) => ({ ...current, total }));
+
+      let blob: Blob;
+      if (res.body) {
+        const reader = res.body.getReader();
+        const chunks: BlobPart[] = [];
+        let loaded = 0;
+        let lastProgressUpdate = 0;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+          loaded += value.byteLength;
+          const now = performance.now();
+          if (
+            now - lastProgressUpdate >= 100 ||
+            (total > 0 && loaded >= total)
+          ) {
+            setIpaDownload({ active: true, loaded, total });
+            lastProgressUpdate = now;
+          }
+        }
+
+        blob = new Blob(chunks, {
+          type: res.headers.get('content-type') || 'application/octet-stream',
+        });
+      } else {
+        blob = await res.blob();
+        setIpaDownload({ active: true, loaded: blob.size, total: blob.size });
+      }
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${task.software.name}_${task.software.version}.ipa`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setIpaDownload({ active: false, loaded: 0, total: 0 });
+    } catch {
+      if (!controller.signal.aborted) {
+        addToast(t('downloads.package.downloadFailed'), 'error');
+      }
+    } finally {
+      if (ipaDownloadAbortRef.current === controller) {
+        ipaDownloadAbortRef.current = null;
+        setIpaDownload({ active: false, loaded: 0, total: 0 });
+      }
     }
   }
 
@@ -276,28 +374,9 @@ export default function PackageDetail() {
                   </>
                 )}
                 <button
-                  onClick={async () => {
-                    toastAction("toast.title.downloadIpaStarted");
-                    try {
-                      const res = await fetch(
-                        `/api/packages/${task.id}/file?accountHash=${encodeURIComponent(task.accountHash)}`,
-                        { headers: authHeaders() },
-                      );
-                      if (!res.ok) throw new Error("Download failed");
-                      const blob = await res.blob();
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement("a");
-                      a.href = url;
-                      a.download = `${task.software.name}_${task.software.version}.ipa`;
-                      document.body.appendChild(a);
-                      a.click();
-                      document.body.removeChild(a);
-                      URL.revokeObjectURL(url);
-                    } catch {
-                      addToast(t("downloads.package.downloadFailed"), "error");
-                    }
-                  }}
-                  className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                  onClick={handleDownloadIpa}
+                  disabled={ipaDownload.active}
+                  className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {t("downloads.package.downloadIpa")}
                 </button>
@@ -328,6 +407,46 @@ export default function PackageDetail() {
           </div>
         </div>
       </div>
+
+      <Modal
+        open={ipaDownload.active}
+        onClose={handleCancelIpaDownload}
+        title={t('downloads.package.downloadingIpa')}
+      >
+        <div className="space-y-4">
+          <div className="text-center">
+            <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
+              {task.software.name}
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 font-mono">
+              {formatBytes(ipaDownload.loaded)} /{' '}
+              {ipaDownload.total > 0
+                ? formatBytes(ipaDownload.total)
+                : t('downloads.package.calculatingSize')}
+            </p>
+          </div>
+          <ProgressBar
+            progress={
+              ipaDownload.total > 0
+                ? (ipaDownload.loaded / ipaDownload.total) * 100
+                : 0
+            }
+          />
+          <p className="text-xs text-gray-400 dark:text-gray-500 text-center font-mono">
+            {ipaDownload.total > 0
+              ? `${Math.min(100, Math.round((ipaDownload.loaded / ipaDownload.total) * 100))}%`
+              : '...'}
+          </p>
+          <div className="flex justify-center">
+            <button
+              onClick={handleCancelIpaDownload}
+              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            >
+              {t('settings.data.cancel')}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         open={showUpdateModal}

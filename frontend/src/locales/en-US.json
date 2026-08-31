@@ -202,6 +202,8 @@
       "copied": "Link copied to clipboard",
       "scan": "Scan to install",
       "downloadIpa": "Download IPA",
+      "downloadingIpa": "Downloading IPA",
+      "calculatingSize": "Calculating size",
       "pause": "Pause",
       "resume": "Resume",
       "delete": "Delete",

@@ -316,7 +316,7 @@ export default function SettingsPage() {
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                    <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 break-all sm:break-normal">
                       UNSAFE_DANGEROUSLY_DISABLE_HTTPS_REDIRECT
                     </dt>
                     <dd className="text-sm text-gray-900 dark:text-gray-200 font-mono">
