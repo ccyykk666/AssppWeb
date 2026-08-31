@@ -444,6 +444,7 @@
       "downloadSuccess": "다운로드 성공",
       "downloadFailed": "다운로드 실패",
       "licenseSuccess": "라이선스 획득 성공",
+      "licenseAlreadyOwned": "이 앱의 라이선스를 이미 보유하고 있습니다",
       "licenseFailed": "라이선스 획득 실패",
       "installStarted": "설치 시작",
       "shareAcquired": "링크 획득",

@@ -100,6 +100,15 @@ export function useDownloadAction() {
     const result = await purchaseApp(currentAccount, app);
     await updateAccount({ ...currentAccount, cookies: result.updatedCookies });
 
+    if (result.status === 'alreadyOwned') {
+      addToast(
+        t('toast.msg', { appName, ...ctx }),
+        'info',
+        t('toast.title.licenseAlreadyOwned'),
+      );
+      return;
+    }
+
     addToast(
       t("toast.msg", { appName, ...ctx }),
       "success",

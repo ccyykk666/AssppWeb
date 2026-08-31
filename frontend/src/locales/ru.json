@@ -444,6 +444,7 @@
       "downloadSuccess": "Успешная загрузка",
       "downloadFailed": "Ошибка загрузки",
       "licenseSuccess": "Лицензия получена",
+      "licenseAlreadyOwned": "Лицензия на приложение уже получена",
       "licenseFailed": "Ошибка получения лицензии",
       "installStarted": "Начало установки",
       "shareAcquired": "Ссылка получена",

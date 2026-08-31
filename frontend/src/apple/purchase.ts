@@ -5,6 +5,8 @@ import { extractAndMergeCookies } from "./cookies";
 import { purchaseAPIHost } from "./config";
 import i18n from "../i18n";
 
+const LICENSE_ALREADY_EXISTS_FAILURE_TYPE = '5002';
+
 export class PurchaseError extends Error {
   constructor(
     message: string,
@@ -15,10 +17,17 @@ export class PurchaseError extends Error {
   }
 }
 
+export type PurchaseStatus = 'acquired' | 'alreadyOwned';
+
+export interface PurchaseResult {
+  updatedCookies: Account['cookies'];
+  status: PurchaseStatus;
+}
+
 export async function purchaseApp(
   account: Account,
   app: Software,
-): Promise<{ updatedCookies: typeof account.cookies }> {
+): Promise<PurchaseResult> {
   if ((app.price ?? 0) > 0) {
     throw new PurchaseError(i18n.t("errors.purchase.paidNotSupported"));
   }
@@ -38,7 +47,7 @@ async function purchaseWithParams(
   account: Account,
   app: Software,
   pricingParameters: string,
-): Promise<{ updatedCookies: typeof account.cookies }> {
+): Promise<PurchaseResult> {
   const deviceId = account.deviceIdentifier;
   const host = purchaseAPIHost(account.pod);
   const path = "/WebObjects/MZFinance.woa/wa/buyProduct";
@@ -88,6 +97,8 @@ async function purchaseWithParams(
     const failureType = String(dict.failureType);
     const customerMessage = dict.customerMessage as string | undefined;
     switch (failureType) {
+      case LICENSE_ALREADY_EXISTS_FAILURE_TYPE:
+        return { updatedCookies, status: 'alreadyOwned' };
       case "2059":
         throw new PurchaseError(i18n.t("errors.purchase.unavailable"), "2059");
       case "2034":
@@ -145,5 +156,5 @@ async function purchaseWithParams(
     throw new PurchaseError(i18n.t("errors.purchase.failedGeneral"));
   }
 
-  return { updatedCookies };
+  return { updatedCookies, status: 'acquired' };
 }

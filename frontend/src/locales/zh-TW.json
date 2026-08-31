@@ -444,6 +444,7 @@
       "downloadSuccess": "下載成功",
       "downloadFailed": "下載失敗",
       "licenseSuccess": "獲取授權成功",
+      "licenseAlreadyOwned": "已獲取過此應用程式的授權",
       "licenseFailed": "獲取授權失敗",
       "installStarted": "開始安裝",
       "shareAcquired": "連結已獲取",
