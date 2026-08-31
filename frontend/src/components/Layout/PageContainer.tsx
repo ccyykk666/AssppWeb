@@ -2,22 +2,12 @@ import { ReactNode, useEffect, useLayoutEffect, useRef } from "react";
 import { useLocation, useNavigationType } from "react-router-dom";
 import { useSearch } from "../../hooks/useSearch";
 
-const MAX_SAVED_POSITIONS = 100;
 interface SavedScrollPosition {
   container: number;
   viewport: number;
 }
 
 const scrollPositions = new Map<string, SavedScrollPosition>();
-
-function saveScrollPosition(key: string, position: SavedScrollPosition) {
-  scrollPositions.delete(key);
-  scrollPositions.set(key, position);
-  if (scrollPositions.size > MAX_SAVED_POSITIONS) {
-    const oldestKey = scrollPositions.keys().next().value;
-    if (oldestKey !== undefined) scrollPositions.delete(oldestKey);
-  }
-}
 
 interface PageContainerProps {
   title?: string;
@@ -47,32 +37,18 @@ export default function PageContainer({
     const targetViewportPosition = savedPosition?.viewport ?? 0;
     const scrollingElement =
       document.scrollingElement ?? document.documentElement;
-    let animationFrame = 0;
-    let attempts = 0;
 
     const restorePosition = () => {
       container.scrollTop = targetContainerPosition;
       scrollingElement.scrollTop = targetViewportPosition;
-      attempts++;
-
-      // Lists can finish loading after the route has rendered. Retry until the
-      // container is tall enough to accept the saved position, with a bounded
-      // loop so normal user scrolling is never continuously overridden.
-      const restoredContainer =
-        Math.abs(container.scrollTop - targetContainerPosition) < 1;
-      const restoredViewport =
-        Math.abs(scrollingElement.scrollTop - targetViewportPosition) < 1;
-      const restored = restoredContainer && restoredViewport;
-      if (!restored && attempts < 120) {
-        animationFrame = requestAnimationFrame(restorePosition);
-      }
     };
 
     restorePosition();
+    const animationFrame = requestAnimationFrame(restorePosition);
 
     return () => {
       cancelAnimationFrame(animationFrame);
-      saveScrollPosition(location.key, {
+      scrollPositions.set(location.key, {
         container: container.scrollTop,
         viewport: scrollingElement.scrollTop,
       });
