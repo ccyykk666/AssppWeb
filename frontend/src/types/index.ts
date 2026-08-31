@@ -66,6 +66,7 @@ export interface DownloadTask {
   id: string;
   software: Software;
   accountHash: string;
+  bundleVersion?: string;
   status:
     | "pending"
     | "downloading"

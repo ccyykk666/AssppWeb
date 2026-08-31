@@ -78,8 +78,14 @@ async function fetchDownloadSizeBytes(
 
 // Start a new download
 router.post("/downloads", async (req: Request, res: Response) => {
-  const { software, accountHash, downloadURL, sinfs, iTunesMetadata } =
-    req.body;
+  const {
+    software,
+    accountHash,
+    downloadURL,
+    sinfs,
+    bundleVersion,
+    iTunesMetadata,
+  } = req.body;
 
   if (!software || !accountHash || !downloadURL || !sinfs) {
     res.status(400).json({
@@ -132,6 +138,7 @@ router.post("/downloads", async (req: Request, res: Response) => {
       downloadURL,
       sinfs,
       iTunesMetadata,
+      bundleVersion,
     );
     res.status(201).json(sanitizeTaskForResponse(task));
   } catch (err) {

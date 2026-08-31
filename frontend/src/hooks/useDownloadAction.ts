@@ -63,6 +63,7 @@ export function useDownloadAction() {
       accountHash: hash,
       downloadURL: output.downloadURL,
       sinfs: output.sinfs,
+      bundleVersion: output.bundleVersion,
       iTunesMetadata: output.iTunesMetadata,
     });
 

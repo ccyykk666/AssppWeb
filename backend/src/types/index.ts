@@ -30,6 +30,7 @@ export interface DownloadTask {
   accountHash: string;
   downloadURL: string;
   sinfs: Sinf[];
+  bundleVersion?: string;
   iTunesMetadata?: string;
   status:
     | "pending"

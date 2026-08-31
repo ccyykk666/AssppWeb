@@ -13,6 +13,8 @@ interface DownloadsState {
     accountHash: string;
     downloadURL: string;
     sinfs: Sinf[];
+    bundleVersion?: string;
+    iTunesMetadata?: string;
   }) => Promise<void>;
   pauseDownload: (id: string) => Promise<void>;
   resumeDownload: (id: string) => Promise<void>;
