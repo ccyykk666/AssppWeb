@@ -58,26 +58,27 @@ function VersionRow({
       onLoadMetadata(versionId, 0);
       return;
     }
-    const scrollRoot = element.closest("[data-page-scroll-container]");
 
     const nearbyObserver = new IntersectionObserver(
       (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
+        const latestEntry = entries[entries.length - 1];
+        if (latestEntry?.isIntersecting) {
           onLoadMetadata(versionId, 1);
         } else {
           onCancelMetadata(versionId);
         }
       },
-      { root: scrollRoot, rootMargin: "240px 0px" },
+      { rootMargin: "240px 0px" },
     );
     const visibleObserver = new IntersectionObserver((entries) => {
-      if (entries.some((entry) => entry.isIntersecting)) {
+      const latestEntry = entries[entries.length - 1];
+      if (latestEntry?.isIntersecting) {
         onLoadMetadata(versionId, 0);
         onSetPriority(versionId, 0);
       } else {
         onSetPriority(versionId, 1);
       }
-    }, { root: scrollRoot });
+    });
 
     nearbyObserver.observe(element);
     visibleObserver.observe(element);

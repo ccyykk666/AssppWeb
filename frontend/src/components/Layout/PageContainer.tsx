@@ -104,7 +104,6 @@ export default function PageContainer({
   return (
     <div
       ref={scrollContainerRef}
-      data-page-scroll-container
       className="flex-1 overflow-y-auto pb-20 md:pb-0 bg-gray-50 dark:bg-gray-950 transition-colors duration-200"
     >
       <div
