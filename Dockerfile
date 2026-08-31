@@ -15,8 +15,10 @@ COPY frontend/ ./
 RUN npm run build
 
 # Stage 3: Build backend
-FROM node:20-alpine AS backend-build
-RUN apk add --no-cache python3 make g++
+FROM node:20-bookworm-slim AS backend-build
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app/backend
 COPY backend/package*.json ./
 RUN npm ci
@@ -24,8 +26,10 @@ COPY backend/ ./
 RUN npm run build
 
 # Stage 4: Runtime
-FROM node:20-alpine
-RUN apk add --no-cache zip
+FROM node:20-bookworm-slim
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates zip \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=backend-build /app/backend/dist ./dist
 COPY --from=backend-build /app/backend/node_modules ./node_modules
