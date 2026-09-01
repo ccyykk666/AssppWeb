@@ -82,6 +82,7 @@ function persistTasks() {
       software: t.software,
       accountHash: t.accountHash,
       bundleVersion: t.bundleVersion,
+      pinnedVersion: t.pinnedVersion,
       downloadURL: "",
       sinfs: [],
       status: t.status,
@@ -210,6 +211,7 @@ function initOnStartup() {
               software: item.software,
               accountHash: item.accountHash,
               bundleVersion: item.bundleVersion,
+              pinnedVersion: item.pinnedVersion === true,
               downloadURL: "",
               sinfs: [],
               status: "completed",
@@ -392,6 +394,7 @@ export function createTask(
   sinfs: Sinf[],
   iTunesMetadata?: string,
   bundleVersion?: string,
+  pinnedVersion?: boolean,
 ): DownloadTask {
   // Validate download URL
   validateDownloadURL(downloadURL);
@@ -411,6 +414,7 @@ export function createTask(
       typeof bundleVersion === "string" && bundleVersion.trim()
         ? bundleVersion.trim()
         : undefined,
+    pinnedVersion: pinnedVersion === true,
     iTunesMetadata,
     status: "pending",
     progress: 0,

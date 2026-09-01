@@ -84,6 +84,7 @@ router.post("/downloads", async (req: Request, res: Response) => {
     downloadURL,
     sinfs,
     bundleVersion,
+    pinnedVersion,
     iTunesMetadata,
   } = req.body;
 
@@ -139,6 +140,7 @@ router.post("/downloads", async (req: Request, res: Response) => {
       sinfs,
       iTunesMetadata,
       bundleVersion,
+      pinnedVersion,
     );
     res.status(201).json(sanitizeTaskForResponse(task));
   } catch (err) {

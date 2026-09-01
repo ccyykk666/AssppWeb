@@ -17,6 +17,7 @@ export async function startDownload(data: {
   downloadURL: string;
   sinfs: Sinf[];
   bundleVersion?: string;
+  pinnedVersion?: boolean;
   iTunesMetadata?: string;
 }): Promise<DownloadTask> {
   return apiPost<DownloadTask>("/api/downloads", data);

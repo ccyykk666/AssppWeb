@@ -31,6 +31,7 @@ export interface DownloadTask {
   downloadURL: string;
   sinfs: Sinf[];
   bundleVersion?: string;
+  pinnedVersion?: boolean;
   iTunesMetadata?: string;
   status:
     | "pending"

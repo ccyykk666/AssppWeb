@@ -14,6 +14,7 @@ interface DownloadsState {
     downloadURL: string;
     sinfs: Sinf[];
     bundleVersion?: string;
+    pinnedVersion?: boolean;
     iTunesMetadata?: string;
   }) => Promise<void>;
   pauseDownload: (id: string) => Promise<void>;

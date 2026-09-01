@@ -87,7 +87,9 @@ export default function DownloadList() {
     setCheckingAll(true);
     addToast(t("downloads.checkUpdatesStarted"), "info");
     let count = 0;
-    const completedTasks = tasks.filter((t) => t.status === "completed");
+    const completedTasks = tasks.filter(
+      (task) => task.status === "completed" && !task.pinnedVersion,
+    );
 
     setCheckProgress({ current: 0, total: completedTasks.length, appName: "" });
 

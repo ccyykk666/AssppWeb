@@ -64,6 +64,9 @@ export function useDownloadAction() {
       downloadURL: output.downloadURL,
       sinfs: output.sinfs,
       bundleVersion: output.bundleVersion,
+      pinnedVersion:
+        versionId !== undefined &&
+        output.bundleShortVersionString !== app.version,
       iTunesMetadata: output.iTunesMetadata,
     });
 
