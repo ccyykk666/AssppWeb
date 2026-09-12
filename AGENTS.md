@@ -120,6 +120,7 @@ The Wisp server validates target hosts via `hostname_whitelist` in `backend/src/
 - `auth.itunes.apple.com` — bag-resolved auth endpoint
 - `buy.itunes.apple.com` — purchase endpoint
 - `init.itunes.apple.com` — bag endpoint
+- `downloaddispatch.itunes.apple.com` — download fallback dispatch endpoint
 - `/^p\d+-buy\.itunes\.apple\.com$/` — pod-based hosts
 - Port restricted to `443` only
 - Direct IP targets blocked (`allow_direct_ip = false`)

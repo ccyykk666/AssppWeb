@@ -1,4 +1,3 @@
-import type { Account, Software, DownloadOutput, Sinf } from "../types";
 import { appleRequest } from "./request";
 import { buildPlist, parsePlist } from "./plist";
 import { extractAndMergeCookies } from "./cookies";
@@ -8,6 +7,7 @@ import {
   volumeStoreEndpoint,
 } from "./config";
 import i18n from "../i18n";
+import type { Account, Software, DownloadOutput, Sinf } from '../types';
 
 export class DownloadError extends Error {
   constructor(
@@ -75,21 +75,36 @@ export async function getDownloadInfo(
       continue;
     }
 
+    if (response.status !== 200) {
+      throw new DownloadError(
+        i18n.t('errors.download.downloadFailed', {
+          failureType: `HTTP ${response.status}`,
+        }),
+        `HTTP_${response.status}`,
+      );
+    }
+
     const dict = parsePlist(response.body) as Record<string, any>;
+    const songList = dict.songList as Record<string, any>[] | undefined;
+    const noItems = !Array.isArray(songList) || songList.length === 0;
+
+    // Both endpoints serve the same requested version. Retry at most once,
+    // including empty volumeStore responses without an explicit Apple error.
+    if (
+      !triedRedownload &&
+      (String(dict.failureType ?? '') === RETRYABLE_FAILURE_TYPE ||
+        (noItems && !dict.failureType && !dict.customerMessage && !dict.action))
+    ) {
+      triedRedownload = true;
+      endpoint = redownloadEndpoint(deviceId);
+      requestHost = endpoint.host;
+      requestPath = endpoint.path;
+      redirectAttempt = 0;
+      continue;
+    }
 
     if (dict.failureType) {
       const failureType = String(dict.failureType);
-
-      // volumeStore intermittently returns 5002; retry once via the
-      // redownload dispatch endpoint, which serves the same payload.
-      if (failureType === RETRYABLE_FAILURE_TYPE && !triedRedownload) {
-        triedRedownload = true;
-        endpoint = redownloadEndpoint(deviceId);
-        requestHost = endpoint.host;
-        requestPath = endpoint.path;
-        redirectAttempt = 0;
-        continue;
-      }
 
       const customerMessage = dict.customerMessage as string | undefined;
       switch (failureType) {
@@ -121,12 +136,16 @@ export async function getDownloadInfo(
       }
     }
 
-    const songList = dict.songList as Record<string, any>[] | undefined;
-    if (!songList || songList.length === 0) {
-      throw new DownloadError(i18n.t("errors.download.noItems"));
+    if (noItems) {
+      throw new DownloadError(
+        typeof dict.customerMessage === 'string' && dict.customerMessage
+          ? dict.customerMessage
+          : i18n.t('errors.download.noItems'),
+        'NO_ITEMS',
+      );
     }
 
-    const item = songList[0];
+    const item = songList![0];
     const url = item.URL as string;
     if (!url) {
       throw new DownloadError(i18n.t("errors.download.missingUrl"));

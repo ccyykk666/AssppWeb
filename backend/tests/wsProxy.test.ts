@@ -3,6 +3,7 @@ import { createServer, Server } from "http";
 import net from "net";
 import { WebSocket } from "ws";
 import express from "express";
+import { server as wisp } from '@mercuryworkshop/wisp-js/server';
 import { setupWsProxy } from "../src/services/wsProxy.js";
 
 let httpServer: Server | null = null;
@@ -31,6 +32,15 @@ async function stopServer() {
 }
 
 describe("Wisp Proxy", () => {
+  it('allows download dispatch but not unrelated or lookalike hosts', () => {
+    const allowed = (host: string) => wisp.options.hostname_whitelist.some(
+      (entry: string | RegExp) => typeof entry === 'string' ? entry === host : entry.test(host),
+    );
+    expect(allowed('downloaddispatch.itunes.apple.com')).toBe(true);
+    expect(allowed('downloaddispatch.itunes.apple.com.example.org')).toBe(false);
+    expect(allowed('example.org')).toBe(false);
+  });
+
   afterEach(async () => {
     await stopServer();
   });
