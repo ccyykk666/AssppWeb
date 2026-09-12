@@ -10,6 +10,7 @@ export interface SAPConfiguration {
 
 export interface BagOutput {
   authURL: string;
+  updateURL?: string;
   sap: SAPConfiguration;
 }
 
@@ -105,6 +106,12 @@ export function parseBagConfiguration(xml: string): BagOutput {
 
   return {
     authURL,
+    // Only this exact Apple endpoint is supported; never forward credentials
+    // to a host/path/query supplied by an unexpected bag response.
+    ...(bagValue(root, urlBag, 'updateProduct') ===
+      'https://downloaddispatch.itunes.apple.com/up/updateProduct'
+      ? { updateURL: 'https://downloaddispatch.itunes.apple.com/up/updateProduct' }
+      : {}),
     sap: {
       setupURL,
       certificateURL,

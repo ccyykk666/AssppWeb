@@ -1,10 +1,13 @@
 import { appleRequest } from "./request";
 import { buildPlist, parsePlist } from "./plist";
 import { extractAndMergeCookies } from "./cookies";
+import { fetchBag } from './bag';
+import { lookupLatestAppVersion } from '../api/search';
 import {
   RETRYABLE_FAILURE_TYPE,
   redownloadEndpoint,
   volumeStoreEndpoint,
+  storeIdToCountry,
 } from "./config";
 import i18n from "../i18n";
 import type { Account, Software, DownloadOutput, Sinf } from '../types';
@@ -30,6 +33,8 @@ export async function getDownloadInfo(
   let requestHost = endpoint.host;
   let requestPath = endpoint.path;
   let triedRedownload = false;
+  let triedUpdate = false;
+  let selectedVersionId = externalVersionId;
   let cookies = [...account.cookies];
   let redirectAttempt = 0;
 
@@ -38,10 +43,11 @@ export async function getDownloadInfo(
       creditDisplay: "",
       guid: deviceId,
       salableAdamId: app.id,
+      serialNumber: '0',
     };
 
-    if (externalVersionId) {
-      payload[endpoint.externalVersionIdKey] = externalVersionId;
+    if (selectedVersionId) {
+      payload[endpoint.externalVersionIdKey] = selectedVersionId;
     }
 
     const plistBody = buildPlist(payload);
@@ -75,6 +81,24 @@ export async function getDownloadInfo(
       continue;
     }
 
+    // Some apps return an empty 500 from redownload even with the current
+    // catalog version. Apple's bag-provided update endpoint serves that build.
+    if (
+      triedRedownload && !triedUpdate && selectedVersionId &&
+      response.status === 500 && !response.body.trim()
+    ) {
+      triedUpdate = true;
+      const bag = await fetchBag(deviceId);
+      if (bag.updateURL) {
+        const url = new URL(bag.updateURL);
+        url.searchParams.set('guid', deviceId);
+        requestHost = url.hostname;
+        requestPath = url.pathname + url.search;
+        redirectAttempt = 0;
+        continue;
+      }
+    }
+
     if (response.status !== 200) {
       throw new DownloadError(
         i18n.t('errors.download.downloadFailed', {
@@ -88,14 +112,29 @@ export async function getDownloadInfo(
     const songList = dict.songList as Record<string, any>[] | undefined;
     const noItems = !Array.isArray(songList) || songList.length === 0;
 
-    // Both endpoints serve the same requested version. Retry at most once,
-    // including empty volumeStore responses without an explicit Apple error.
+    // Switch to redownload at most once for an explicit retryable error or
+    // an empty volumeStore response. Pin latest requests to the iOS catalog
+    // build so dispatch cannot silently select a different platform/version.
     if (
       !triedRedownload &&
       (String(dict.failureType ?? '') === RETRYABLE_FAILURE_TYPE ||
         (noItems && !dict.failureType && !dict.customerMessage && !dict.action))
     ) {
       triedRedownload = true;
+      if (!selectedVersionId) {
+        const country = storeIdToCountry(account.store);
+        if (!country) {
+          throw new DownloadError(i18n.t('errors.download.latestVersionUnavailable'), 'LATEST_VERSION_UNAVAILABLE');
+        }
+        const latest = await lookupLatestAppVersion(app.id, country);
+        if (
+          !latest || !/^[1-9]\d*$/.test(latest.externalVersionId) ||
+          latest.bundleID !== app.bundleID
+        ) {
+          throw new DownloadError(i18n.t('errors.download.latestVersionUnavailable'), 'LATEST_VERSION_UNAVAILABLE');
+        }
+        selectedVersionId = latest.externalVersionId;
+      }
       endpoint = redownloadEndpoint(deviceId);
       requestHost = endpoint.host;
       requestPath = endpoint.path;
@@ -154,6 +193,16 @@ export async function getDownloadInfo(
     const metadata = item.metadata as Record<string, any>;
     if (!metadata) {
       throw new DownloadError(i18n.t("errors.download.missingMetadata"));
+    }
+
+    // Never accept a wrong app/platform/version from the fallback endpoints.
+    if (triedRedownload && (
+      songList!.length !== 1 ||
+      String(metadata.itemId) !== String(app.id) ||
+      metadata.softwareVersionBundleId !== app.bundleID ||
+      String(metadata.softwareVersionExternalIdentifier) !== selectedVersionId
+    )) {
+      throw new DownloadError(i18n.t('errors.download.mismatchedItem'), 'MISMATCHED_ITEM');
     }
 
     const version = metadata.bundleShortVersionString as string;

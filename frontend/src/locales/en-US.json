@@ -413,6 +413,8 @@
       "licenseRequired": "License required - purchase the app first",
       "downloadFailed": "Download failed: {{failureType}}",
       "noItems": "No items in response",
+      "latestVersionUnavailable": "Cannot resolve the latest build in this account's region. Download stopped to avoid selecting the wrong version.",
+      "mismatchedItem": "Apple returned a different app or build. Download stopped.",
       "missingUrl": "Missing download URL",
       "missingMetadata": "Missing metadata",
       "missingVersion": "Missing required version information",

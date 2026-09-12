@@ -77,4 +77,13 @@ describe('apple/bag', () => {
       '/api/bag?guid=AABBCCDDEEFF',
     );
   });
+
+  it('accepts only the exact supported update endpoint', () => {
+    const endpoint = 'https://downloaddispatch.itunes.apple.com/up/updateProduct';
+    expect(parseBagConfiguration(buildPlist({ urlBag: { ...validBag.urlBag, updateProduct: endpoint } })).updateURL).toBe(endpoint);
+    for (const invalid of [endpoint + '?x=1', endpoint + '#x', endpoint.replace('https:', 'http:'),
+      endpoint.replace('itunes.apple.com', 'itunes.apple.com.evil.test')]) {
+      expect(parseBagConfiguration(buildPlist({ urlBag: { ...validBag.urlBag, updateProduct: invalid } })).updateURL).toBeUndefined();
+    }
+  });
 });

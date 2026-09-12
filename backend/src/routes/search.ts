@@ -59,4 +59,38 @@ router.get("/lookup", async (req: Request, res: Response) => {
   }
 });
 
+// Public catalog metadata only: no Apple credentials or cookies are needed.
+router.get('/catalog-version', async (req: Request, res: Response) => {
+  const { id, country } = req.query;
+  if (typeof id !== 'string' || !/^[1-9]\d{0,15}$/.test(id) ||
+    typeof country !== 'string' || !/^[a-z]{2}$/i.test(country)) {
+    res.status(400).json({ error: 'Invalid app ID or country' });
+    return;
+  }
+  try {
+    const params = new URLSearchParams({
+      version: '2', id, p: 'mdm-lockup', caller: 'MDM',
+      platform: 'enterprisestore', cc: country.toLowerCase(), l: 'en',
+    });
+    const response = await fetch(
+      `https://uclient-api.itunes.apple.com/WebObjects/MZStorePlatform.woa/wa/lookup?${params}`,
+      { signal: AbortSignal.timeout(15000), redirect: 'error' },
+    );
+    if (!response.ok) throw new Error('Catalog HTTP error');
+    const data = await response.json();
+    const item = data.results?.[id];
+    const offer = item?.offers?.[0];
+    const externalVersionId = String(offer?.version?.externalId ??
+      new URLSearchParams(offer?.buyParams ?? '').get('appExtVrsId') ?? '');
+    if (!item || typeof item.bundleId !== 'string' || !item.bundleId ||
+      !/^[1-9]\d*$/.test(externalVersionId)) {
+      res.json(null);
+      return;
+    }
+    res.json({ externalVersionId, version: offer?.version?.display ?? '', bundleID: item.bundleId });
+  } catch {
+    res.status(502).json({ error: 'Latest Apple catalog version lookup failed' });
+  }
+});
+
 export default router;

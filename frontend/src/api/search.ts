@@ -23,3 +23,14 @@ export async function lookupApp(
   const params = new URLSearchParams({ bundleId, country });
   return apiGet<Software | null>(`/api/lookup?${params}`);
 }
+
+export interface CatalogVersion {
+  externalVersionId: string;
+  version: string;
+  bundleID: string;
+}
+
+export async function lookupLatestAppVersion(id: number, country: string): Promise<CatalogVersion | null> {
+  const params = new URLSearchParams({ id: String(id), country });
+  return apiGet<CatalogVersion | null>(`/api/catalog-version?${params}`);
+}

@@ -127,6 +127,16 @@ The Wisp server validates target hosts via `hostname_whitelist` in `backend/src/
 - Loopback IP targets blocked (`allow_loopback_ips = false`)
 - Private/reserved resolved IPs allowed (`allow_private_ips = true`) for Docker/OrbStack DNS translation while hostname allowlist remains the primary control
 
+### Empty Apple Download Responses
+
+When volumeStore returns no items/no explicit error, resolve the current iOS
+build from the account storefront's public catalog before redownload (explicit
+historical build IDs must remain unchanged). Only an empty redownload HTTP 500
+may retry the exact bag-provided `/up/updateProduct` endpoint once. Validate the
+returned app ID, bundle ID, and external version ID before accepting fallback
+downloads. `/api/catalog-version` proxies fixed public Apple catalog metadata
+without account credentials; it is not a general-purpose proxy or history lookup.
+
 ## Bag Proxy (Backend)
 
 The backend proxies the bag endpoint via `GET /api/bag?guid=<deviceId>` using Node.js native HTTPS. It sends Configurator-compatible request headers (`User-Agent`, `Accept: application/xml`). The bag response is public data (Apple service URLs) — no credentials are involved. See `backend/src/routes/bag.ts`.

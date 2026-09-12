@@ -413,6 +413,8 @@
       "licenseRequired": "需要许可证 - 请先购买该应用",
       "downloadFailed": "下载失败: {{failureType}}",
       "noItems": "响应中没有项目",
+      "latestVersionUnavailable": "无法确认此账号地区的最新构建号，已停止下载，避免获取错误版本",
+      "mismatchedItem": "Apple 返回的应用或构建号与请求不一致，已停止下载",
       "missingUrl": "缺少下载 URL",
       "missingMetadata": "缺少元数据",
       "missingVersion": "缺少所需的版本信息",
