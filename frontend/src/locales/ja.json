@@ -166,6 +166,7 @@
       "injecting": "注入中"
     },
     "item": {
+      "install": "インストール",
       "viewPackage": "パッケージを表示"
     },
     "add": {

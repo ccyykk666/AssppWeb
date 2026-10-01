@@ -77,6 +77,17 @@ export default function DownloadList() {
     deleteDownload(id);
   }
 
+  function handleInstall(task: DownloadTask) {
+    const accountEmail = hashToEmail[task.accountHash];
+    const account = accounts.find((a) => a.email === accountEmail);
+    const ctx = getAccountContext(account, t);
+    addToast(
+      t("toast.msg", { appName: task.software.name, ...ctx }),
+      "info",
+      t("toast.title.installStarted"),
+    );
+  }
+
   function handleCancelCheck() {
     cancelCheckRef.current = true;
     setCheckingAll(false);
@@ -264,6 +275,7 @@ export default function DownloadList() {
               onPause={pauseDownload}
               onResume={resumeDownload}
               onDelete={handleDelete}
+              onInstall={handleInstall}
             />
           ))}
         </div>

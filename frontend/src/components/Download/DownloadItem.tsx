@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import AppIcon from "../common/AppIcon";
 import Badge from "../common/Badge";
 import ProgressBar from "../common/ProgressBar";
+import { getInstallInfo } from "../../api/install";
 import type { DownloadTask } from "../../types";
 
 interface DownloadItemProps {
@@ -10,6 +11,7 @@ interface DownloadItemProps {
   onPause: (id: string) => void;
   onResume: (id: string) => void;
   onDelete: (id: string) => void;
+  onInstall: (task: DownloadTask) => void;
 }
 
 export default function DownloadItem({
@@ -17,12 +19,14 @@ export default function DownloadItem({
   onPause,
   onResume,
   onDelete,
+  onInstall,
 }: DownloadItemProps) {
   const { t } = useTranslation();
 
   const isActive = task.status === "downloading" || task.status === "injecting";
   const isPaused = task.status === "paused";
   const isCompleted = task.status === "completed";
+  const installInfo = isCompleted && task.hasFile ? getInstallInfo(task.id) : null;
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-3">
@@ -87,12 +91,23 @@ export default function DownloadItem({
               </button>
             )}
             {isCompleted && task.hasFile && (
-              <Link
-                to={`/downloads/${task.id}`}
-                className="inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-800/60 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/30 shadow-sm transition-colors"
-              >
-                {t("downloads.item.viewPackage")}
-              </Link>
+              <>
+                {installInfo && (
+                  <a
+                    href={installInfo.installUrl}
+                    onClick={() => onInstall(task)}
+                    className="inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium text-white bg-green-600 border border-green-600 rounded-md hover:bg-green-700 shadow-sm transition-colors"
+                  >
+                    {t("downloads.item.install")}
+                  </a>
+                )}
+                <Link
+                  to={`/downloads/${task.id}`}
+                  className="inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-800/60 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/30 shadow-sm transition-colors"
+                >
+                  {t("downloads.item.viewPackage")}
+                </Link>
+              </>
             )}
             <button
               onClick={() => onDelete(task.id)}

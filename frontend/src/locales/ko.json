@@ -166,6 +166,7 @@
       "injecting": "주입 중"
     },
     "item": {
+      "install": "설치",
       "viewPackage": "패키지 보기"
     },
     "add": {

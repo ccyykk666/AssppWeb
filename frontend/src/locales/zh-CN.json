@@ -166,6 +166,7 @@
       "injecting": "注入中"
     },
     "item": {
+      "install": "安装",
       "viewPackage": "查看安装包"
     },
     "add": {
