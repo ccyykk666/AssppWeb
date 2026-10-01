@@ -50,10 +50,10 @@ describe("DownloadItem installation action", () => {
       getInstallInfo(completedTask.id).installUrl,
     );
     expect(
-      screen.getByRole("link", { name: "View Package" }),
+      screen.getByRole("link", { name: "View" }),
     ).toHaveAttribute("href", `/downloads/${completedTask.id}`);
     const actions = screen.getAllByRole("link");
-    expect(actions.indexOf(screen.getByRole("link", { name: "View Package" })))
+    expect(actions.indexOf(screen.getByRole("link", { name: "View" })))
       .toBeLessThan(actions.indexOf(install));
   });
 
