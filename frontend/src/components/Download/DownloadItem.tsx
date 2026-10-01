@@ -92,6 +92,12 @@ export default function DownloadItem({
             )}
             {isCompleted && task.hasFile && (
               <>
+                <Link
+                  to={`/downloads/${task.id}`}
+                  className="inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-800/60 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/30 shadow-sm transition-colors"
+                >
+                  {t("downloads.item.viewPackage")}
+                </Link>
                 {installInfo && (
                   <a
                     href={installInfo.installUrl}
@@ -101,12 +107,6 @@ export default function DownloadItem({
                     {t("downloads.item.install")}
                   </a>
                 )}
-                <Link
-                  to={`/downloads/${task.id}`}
-                  className="inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-800/60 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/30 shadow-sm transition-colors"
-                >
-                  {t("downloads.item.viewPackage")}
-                </Link>
               </>
             )}
             <button

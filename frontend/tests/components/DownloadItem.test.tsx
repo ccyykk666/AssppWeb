@@ -52,6 +52,9 @@ describe("DownloadItem installation action", () => {
     expect(
       screen.getByRole("link", { name: "View Package" }),
     ).toHaveAttribute("href", `/downloads/${completedTask.id}`);
+    const actions = screen.getAllByRole("link");
+    expect(actions.indexOf(screen.getByRole("link", { name: "View Package" })))
+      .toBeLessThan(actions.indexOf(install));
   });
 
   it.each([
