@@ -7,7 +7,7 @@ import { useAccounts } from "../../hooks/useAccounts";
 import { useDownloadAction } from "../../hooks/useDownloadAction";
 import { listVersions } from "../../apple/versionFinder";
 import { storeIdToCountry } from "../../apple/config";
-import { getVersionMetadata } from "../../apple/versionLookup";
+import { resolveVersionMetadata } from "../../apple/versionMetadataResolver";
 import { getErrorMessage } from "../../utils/error";
 import { useToastStore } from "../../store/toast";
 import type { Software, VersionMetadata } from "../../types";
@@ -71,7 +71,7 @@ export default function VersionHistory() {
     if (!account || !app || versionMeta[versionId]) return;
     setLoadingMeta((prev) => ({ ...prev, [versionId]: true }));
     try {
-      const result = await getVersionMetadata(account, app, versionId);
+      const result = await resolveVersionMetadata(account, app, versionId);
       setVersionMeta((prev) => ({ ...prev, [versionId]: result.metadata }));
       await updateAccount({ ...account, cookies: result.updatedCookies });
     } catch {
@@ -146,7 +146,9 @@ export default function VersionHistory() {
               >
                 {loading
                   ? t("search.versions.loading")
-                  : t("search.versions.load")}
+                  : versions.length > 0
+                    ? t("search.versions.refresh")
+                    : t("search.versions.load")}
               </button>
             </div>
           )

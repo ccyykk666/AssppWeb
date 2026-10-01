@@ -82,6 +82,7 @@
       "downloadFailed": "下載失敗",
       "account": "帳號",
       "load": "載入版本",
+      "refresh": "重新整理版本",
       "loading": "載入中...",
       "loadDetails": "載入詳情",
       "resolvingVersion": "正在取得版本號...",

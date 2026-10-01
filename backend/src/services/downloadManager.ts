@@ -428,6 +428,8 @@ export function createTask(
 }
 
 async function startDownload(task: DownloadTask) {
+  const startedAt = Date.now();
+  let downloadFinishedAt = startedAt;
   // Pre-download cleanup: expire old files + enforce space limit
   runTimeCleanup();
   runSpaceCleanup();
@@ -488,6 +490,7 @@ async function startDownload(task: DownloadTask) {
     chunkDownloaders.set(task.id, downloader);
 
     await downloader.download(controller.signal);
+    downloadFinishedAt = Date.now();
 
     chunkDownloaders.delete(task.id);
     abortControllers.delete(task.id);
@@ -504,6 +507,24 @@ async function startDownload(task: DownloadTask) {
 
     task.status = "completed";
     task.progress = 100;
+
+    const completedAt = Date.now();
+    let sizeBytes: number | undefined;
+    try {
+      sizeBytes = fs.statSync(filePath).size;
+    } catch {
+      // The task can still complete even if timing diagnostics cannot stat it.
+    }
+    console.log(
+      "[DownloadTiming]",
+      JSON.stringify({
+        taskId: task.id,
+        sizeBytes,
+        downloadMs: downloadFinishedAt - startedAt,
+        injectMs: completedAt - downloadFinishedAt,
+        totalMs: completedAt - startedAt,
+      }),
+    );
 
     // Strip sensitive data after successful compile
     task.downloadURL = "";

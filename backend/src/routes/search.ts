@@ -23,6 +23,7 @@ function mapSoftware(item: Record<string, any>) {
     releaseNotes: item.releaseNotes,
     formattedPrice: item.formattedPrice,
     primaryGenreName: item.primaryGenreName,
+    primaryGenreId: item.primaryGenreId,
   };
 }
 

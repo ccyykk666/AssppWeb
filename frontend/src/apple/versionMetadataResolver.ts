@@ -48,7 +48,10 @@ export async function resolveVersionMetadata(
   const key = `${app.id}:${versionId}`;
   const cached = await getCachedVersionMetadata(app, versionId);
   if (cached) {
-    return { metadata: cached, updatedCookies: account.cookies };
+    return {
+      metadata: cached,
+      updatedCookies: latestCookies.get(account.email) ?? account.cookies,
+    };
   }
 
   const requestKey = `${account.email}\u0000${key}`;

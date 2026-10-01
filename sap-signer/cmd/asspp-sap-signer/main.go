@@ -28,8 +28,8 @@ const (
 	defaultAddress = "127.0.0.1:54726"
 	maxJSONBody    = 128 << 10
 	maxActionBody  = 64 << 10
-	sessionTTL     = 15 * time.Minute
-	maxSessions    = 4
+	sessionTTL     = 60 * time.Minute
+	maxSessions    = 8
 )
 
 type signRequest struct {

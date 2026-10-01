@@ -100,6 +100,11 @@ export function useDownloadAction() {
     // This value is static for the lifetime of the server. Warm it while the
     // user is reading the app page instead of after they click Download.
     void loadDownloadSettings().catch(() => undefined);
+    // Load the Apple networking WASM while the action UI is idle so the first
+    // license or download click does not pay its cold-start cost.
+    void import("../apple/libcurl-init")
+      .then(({ initLibcurl }) => initLibcurl())
+      .catch(() => undefined);
   }, []);
 
   async function startDownload(

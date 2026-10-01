@@ -36,15 +36,19 @@ class HttpRangeReader extends Reader {
 
     const firstBlock = Math.floor(start / RANGE_BLOCK_SIZE) * RANGE_BLOCK_SIZE;
     const end = start + length;
-    const chunks: Buffer[] = [];
-
+    const blockStarts: number[] = [];
     for (
       let blockStart = firstBlock;
       blockStart < end;
       blockStart += RANGE_BLOCK_SIZE
     ) {
-      chunks.push(await this.getBlock(blockStart));
+      blockStarts.push(blockStart);
     }
+    // ZIP reads can span several blocks. Fetch independent ranges together
+    // instead of paying one Apple CDN round trip per block.
+    const chunks = await Promise.all(
+      blockStarts.map((blockStart) => this.getBlock(blockStart)),
+    );
 
     const combined = Buffer.concat(chunks);
     const offset = start - firstBlock;

@@ -82,6 +82,7 @@
       "downloadFailed": "下载失败",
       "account": "账号",
       "load": "加载版本",
+      "refresh": "刷新版本",
       "loading": "加载中...",
       "loadDetails": "加载详情",
       "resolvingVersion": "正在获取版本号...",

@@ -124,6 +124,10 @@ export async function signSAPAction(input: SAPSignInput): Promise<string> {
   return result.signature;
 }
 
+export async function prewarmSAPSigner(): Promise<void> {
+  await ensureSigner();
+}
+
 export function stopSAPSigner(): void {
   if (signerProcess && !signerProcess.killed) {
     signerProcess.kill();

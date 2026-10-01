@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   clearVersionMetadataCache,
   getCachedVersionMetadata,
   putCachedVersionMetadata,
+  VERSION_METADATA_CACHE_TTL_MS,
 } from '../../src/apple/versionMetadataCache';
 import type { Software } from '../../src/types';
 
@@ -37,5 +38,21 @@ describe('version metadata cache', () => {
     await clearVersionMetadataCache();
 
     await expect(getCachedVersionMetadata(app, '456')).resolves.toBeUndefined();
+  });
+
+  it('expires old entries so rare upstream metadata corrections can refresh', async () => {
+    const now = Date.UTC(2026, 9, 1);
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(now);
+    try {
+      await putCachedVersionMetadata(app, '456', {
+        displayVersion: '1.0',
+        releaseDate: '2024-01-01T00:00:00.000Z',
+      });
+
+      nowSpy.mockReturnValue(now + VERSION_METADATA_CACHE_TTL_MS);
+      await expect(getCachedVersionMetadata(app, '456')).resolves.toBeUndefined();
+    } finally {
+      nowSpy.mockRestore();
+    }
   });
 });

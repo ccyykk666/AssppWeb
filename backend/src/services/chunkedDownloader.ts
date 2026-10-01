@@ -1,5 +1,4 @@
 import fs from "fs";
-import path from "path";
 import { pipeline } from "stream/promises";
 import { Readable } from "stream";
 import {
@@ -20,6 +19,8 @@ interface ProgressInfo {
   total: number;
   speed: string;
 }
+
+const TARGET_CHUNK_SIZE = 32 * 1024 * 1024;
 
 type ProgressCallback = (info: ProgressInfo) => void;
 
@@ -77,9 +78,15 @@ export class ChunkedDownloader {
 
   /** Split total size into chunk ranges. */
   private splitChunks(totalSize: number): ChunkRange[] {
-    const chunkSize = Math.ceil(totalSize / this.threads);
+    // Keep all workers busy, but use more chunks for large files so a single
+    // slow connection cannot hold the entire download at the tail.
+    const desiredChunks = Math.max(
+      this.threads,
+      Math.ceil(totalSize / TARGET_CHUNK_SIZE),
+    );
+    const chunkSize = Math.ceil(totalSize / desiredChunks);
     const chunks: ChunkRange[] = [];
-    for (let i = 0; i < this.threads; i++) {
+    for (let i = 0; i < desiredChunks; i++) {
       const start = i * chunkSize;
       const end = Math.min(start + chunkSize - 1, totalSize - 1);
       if (start > totalSize - 1) break;
@@ -93,7 +100,6 @@ export class ChunkedDownloader {
     chunk: ChunkRange,
     signal: AbortSignal,
   ): Promise<void> {
-    const partPath = `${this.destPath}.part${chunk.index}`;
     const expectedBytes = chunk.end - chunk.start + 1;
     let lastErr: Error | undefined;
 
@@ -104,22 +110,27 @@ export class ChunkedDownloader {
       this.abortControllers.add(ac);
       const onAbort = () => ac.abort();
       signal.addEventListener("abort", onAbort, { once: true });
+      if (signal.aborted) ac.abort();
 
       try {
+        this.chunkBytes[chunk.index] = 0;
         const res = await fetch(this.url, {
           signal: ac.signal,
           redirect: "follow",
           headers: { Range: `bytes=${chunk.start}-${chunk.end}` },
         });
 
-        if (res.status !== 206 && res.status !== 200) {
+        if (res.status !== 206) {
           throw new Error(`Chunk ${chunk.index}: HTTP ${res.status}`);
         }
         if (!res.body) {
           throw new Error(`Chunk ${chunk.index}: no body`);
         }
 
-        const ws = fs.createWriteStream(partPath);
+        const ws = fs.createWriteStream(this.destPath, {
+          flags: "r+",
+          start: chunk.start,
+        });
         const reader = res.body.getReader();
         const chunkBytesRef = this.chunkBytes;
         const chunkIndex = chunk.index;
@@ -134,7 +145,7 @@ export class ChunkedDownloader {
                 return;
               }
               chunkDownloaded += value.byteLength;
-              if (chunkDownloaded > expectedBytes * 2) {
+              if (chunkDownloaded > expectedBytes) {
                 this.destroy(
                   new Error(`Chunk ${chunkIndex}: exceeded expected size`),
                 );
@@ -149,6 +160,11 @@ export class ChunkedDownloader {
         });
 
         await pipeline(readable, ws);
+        if (chunkDownloaded !== expectedBytes) {
+          throw new Error(
+            `Chunk ${chunk.index}: expected ${expectedBytes} bytes, received ${chunkDownloaded}`,
+          );
+        }
         return; // success
       } catch (err) {
         lastErr = err instanceof Error ? err : new Error(String(err));
@@ -165,32 +181,11 @@ export class ChunkedDownloader {
     throw lastErr ?? new Error(`Chunk ${chunk.index} failed after retries`);
   }
 
-  /** Merge all .part files into the final destination. */
-  private async mergeChunks(chunkCount: number): Promise<void> {
-    const ws = fs.createWriteStream(this.destPath);
-    for (let i = 0; i < chunkCount; i++) {
-      const partPath = `${this.destPath}.part${i}`;
-      const rs = fs.createReadStream(partPath);
-      await pipeline(rs, ws, { end: false });
-    }
-    ws.end();
-    await new Promise<void>((resolve, reject) => {
-      ws.on("finish", resolve);
-      ws.on("error", reject);
-    });
-
-    this.cleanPartFiles(chunkCount);
-  }
-
-  /** Remove .part temporary files. */
-  private cleanPartFiles(chunkCount: number): void {
-    for (let i = 0; i < chunkCount; i++) {
-      const partPath = `${this.destPath}.part${i}`;
-      try {
-        if (fs.existsSync(partPath)) fs.unlinkSync(partPath);
-      } catch {
-        // best-effort cleanup
-      }
+  private cleanDestination(): void {
+    try {
+      if (fs.existsSync(this.destPath)) fs.unlinkSync(this.destPath);
+    } catch {
+      // best-effort cleanup
     }
   }
 
@@ -285,13 +280,27 @@ export class ChunkedDownloader {
     }
 
     if (!supportsRange || this.threads <= 1) {
-      await this.downloadSingleStream(signal);
+      try {
+        await this.downloadSingleStream(signal);
+      } catch (error) {
+        this.cleanDestination();
+        throw error;
+      }
       return;
     }
 
     this.totalSize = contentLength;
     const chunks = this.splitChunks(contentLength);
     this.chunkBytes = new Array(chunks.length).fill(0);
+
+    // Preallocate the final IPA. Range workers write directly to their own
+    // offsets, eliminating the previous full-file merge and duplicate disk IO.
+    const file = await fs.promises.open(this.destPath, "w");
+    try {
+      await file.truncate(contentLength);
+    } finally {
+      await file.close();
+    }
 
     this.lastProgressTime = Date.now();
     this.lastProgressBytes = 0;
@@ -317,12 +326,22 @@ export class ChunkedDownloader {
     }, 500);
 
     try {
+      let nextChunkIndex = 0;
+      const worker = async () => {
+        while (true) {
+          const index = nextChunkIndex++;
+          if (index >= chunks.length) return;
+          await this.downloadChunk(chunks[index], signal);
+        }
+      };
       await Promise.all(
-        chunks.map((chunk) => this.downloadChunk(chunk, signal)),
+        Array.from(
+          { length: Math.min(this.threads, chunks.length) },
+          () => worker(),
+        ),
       );
 
       clearInterval(progressInterval);
-      await this.mergeChunks(chunks.length);
 
       this.onProgress?.({
         downloaded: this.totalSize,
@@ -331,7 +350,10 @@ export class ChunkedDownloader {
       });
     } catch (err) {
       clearInterval(progressInterval);
-      this.cleanPartFiles(chunks.length);
+      this.aborted = true;
+      for (const controller of this.abortControllers) controller.abort();
+      this.abortControllers.clear();
+      this.cleanDestination();
       throw err;
     }
   }
@@ -348,24 +370,7 @@ export class ChunkedDownloader {
     }
     this.abortControllers.clear();
 
-    // Clean up any .part files by scanning directory
-    try {
-      const dir = path.dirname(this.destPath);
-      const base = path.basename(this.destPath);
-      if (fs.existsSync(dir)) {
-        for (const entry of fs.readdirSync(dir)) {
-          if (entry.startsWith(base + ".part")) {
-            try {
-              fs.unlinkSync(path.join(dir, entry));
-            } catch {
-              // best-effort
-            }
-          }
-        }
-      }
-    } catch {
-      // best-effort cleanup
-    }
+    this.cleanDestination();
   }
 }
 

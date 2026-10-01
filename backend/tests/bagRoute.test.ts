@@ -35,9 +35,12 @@ describe("Bag Route", () => {
 
     const app = createApp();
     const res = await request(app).get("/api/bag?guid=aabbccddeeff");
+    const cachedRes = await request(app).get("/api/bag?guid=aabbccddeeff");
 
     expect(res.status).toBe(200);
     expect(res.text).toContain("<plist");
+    expect(cachedRes.status).toBe(200);
+    expect(cachedRes.text).toBe(res.text);
     expect(getSpy).toHaveBeenCalledTimes(1);
 
     const [, options] = getSpy.mock.calls[0];
@@ -60,7 +63,7 @@ describe("Bag Route", () => {
     );
 
     const app = createApp();
-    const res = await request(app).get("/api/bag?guid=aabbccddeeff");
+    const res = await request(app).get("/api/bag?guid=ffeeddccbbaa");
 
     expect(res.status).toBe(502);
     expect(res.body.error).toBe("Bag request failed");

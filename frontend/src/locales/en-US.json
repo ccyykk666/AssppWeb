@@ -82,6 +82,7 @@
       "downloadFailed": "Download failed",
       "account": "Account",
       "load": "Load Versions",
+      "refresh": "Refresh Versions",
       "loading": "Loading...",
       "loadDetails": "Load details",
       "resolvingVersion": "Fetching version number...",

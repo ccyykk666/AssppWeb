@@ -32,12 +32,14 @@ export async function purchaseApp(
     throw new PurchaseError(i18n.t("errors.purchase.paidNotSupported"));
   }
 
+  const preferredParameters = app.primaryGenreId === 6014 ? "GAME" : "STDQ";
+  const fallbackParameters = preferredParameters === "GAME" ? "STDQ" : "GAME";
   try {
-    return await purchaseWithParams(account, app, "STDQ");
+    return await purchaseWithParams(account, app, preferredParameters);
   } catch (e) {
     // Rely on error code instead of translated message string to prevent matching issues
     if (e instanceof PurchaseError && e.code === "2059") {
-      return await purchaseWithParams(account, app, "GAME");
+      return await purchaseWithParams(account, app, fallbackParameters);
     }
     throw e;
   }

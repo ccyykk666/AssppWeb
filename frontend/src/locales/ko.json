@@ -82,6 +82,7 @@
       "downloadFailed": "다운로드 실패",
       "account": "계정",
       "load": "버전 불러오기",
+      "refresh": "버전 새로고침",
       "loading": "로딩 중...",
       "loadDetails": "세부 정보 불러오기",
       "resolvingVersion": "버전 번호를 가져오는 중...",

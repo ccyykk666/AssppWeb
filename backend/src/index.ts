@@ -7,6 +7,7 @@ import { httpsRedirect } from "./middleware/httpsRedirect.js";
 import { accessAuth } from "./middleware/accessAuth.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { setupWsProxy } from "./services/wsProxy.js";
+import { prewarmSAPSigner } from "./services/sapSigner.js";
 import authRoutes from "./routes/auth.js";
 import searchRoutes from "./routes/search.js";
 import downloadRoutes from "./routes/downloads.js";
@@ -37,7 +38,21 @@ app.use('/api', versionMetadataRoutes);
 
 // Serve static frontend files
 const publicDir = path.resolve(import.meta.dirname, "../public");
-app.use(express.static(publicDir));
+app.use(
+  express.static(publicDir, {
+    setHeaders: (res, filePath) => {
+      const relativePath = path.relative(publicDir, filePath);
+      if (relativePath.startsWith(`assets${path.sep}`)) {
+        res.setHeader(
+          "Cache-Control",
+          "public, max-age=31536000, immutable",
+        );
+      } else if (path.basename(filePath) === "index.html") {
+        res.setHeader("Cache-Control", "no-cache");
+      }
+    },
+  }),
+);
 
 // SPA fallback: serve index.html for non-API routes
 app.get("*", (req, res, next) => {
@@ -46,6 +61,7 @@ app.get("*", (req, res, next) => {
   }
   const indexPath = path.join(publicDir, "index.html");
   if (fs.existsSync(indexPath)) {
+    res.setHeader("Cache-Control", "no-cache");
     res.sendFile(indexPath);
   } else {
     next();
@@ -67,6 +83,12 @@ fs.mkdirSync(config.dataDir, { recursive: true });
 server.listen(config.port, () => {
   console.log(`Server listening on port ${config.port}`);
   console.log(`Data directory: ${path.resolve(config.dataDir)}`);
+  void prewarmSAPSigner().catch((error) => {
+    console.error(
+      "SAP signer prewarm failed:",
+      error instanceof Error ? error.message : error,
+    );
+  });
 });
 
 export { app, server };

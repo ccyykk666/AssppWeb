@@ -63,6 +63,36 @@ describe('apple/purchase', () => {
     });
   });
 
+  it('uses the game pricing path first for App Store games', async () => {
+    vi.mocked(appleRequest).mockResolvedValue(
+      appleResponse({ jingleDocType: 'purchaseSuccess', status: 0 }),
+    );
+
+    await purchaseApp(account, { ...app, primaryGenreId: 6014 });
+
+    expect(vi.mocked(appleRequest).mock.calls[0][0].body).toContain(
+      '<string>GAME</string>',
+    );
+    expect(appleRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to the game pricing path when Apple requests it', async () => {
+    vi.mocked(appleRequest)
+      .mockResolvedValueOnce(appleResponse({ failureType: '2059' }))
+      .mockResolvedValueOnce(
+        appleResponse({ jingleDocType: 'purchaseSuccess', status: 0 }),
+      );
+
+    await purchaseApp(account, app);
+
+    expect(vi.mocked(appleRequest).mock.calls[0][0].body).toContain(
+      '<string>STDQ</string>',
+    );
+    expect(vi.mocked(appleRequest).mock.calls[1][0].body).toContain(
+      '<string>GAME</string>',
+    );
+  });
+
   it('reports an existing license from Apple failure type 5002', async () => {
     vi.mocked(appleRequest).mockResolvedValue(
       appleResponse({

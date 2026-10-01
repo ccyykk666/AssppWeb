@@ -17,6 +17,7 @@ export interface Software {
   releaseNotes?: string;
   formattedPrice?: string;
   primaryGenreName: string;
+  primaryGenreId?: number;
 }
 
 export interface Cookie {
