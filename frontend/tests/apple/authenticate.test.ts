@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { authenticate } from '../../src/apple/authenticate';
 import { fetchBag } from '../../src/apple/bag';
 import { buildPlist, parsePlist } from '../../src/apple/plist';
@@ -45,6 +45,10 @@ describe('apple/authenticate', () => {
     vi.mocked(fetchBag).mockResolvedValue(bag);
     vi.mocked(signSAPAction).mockResolvedValue('c2lnbmF0dXJl');
     vi.mocked(appleRequest).mockResolvedValue(successfulResponse());
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('signs and sends the exact SAP login body with a canonical GUID', async () => {
@@ -132,5 +136,71 @@ describe('apple/authenticate', () => {
       parsePlist(vi.mocked(appleRequest).mock.calls[1][0].body as string)
         .attempt,
     ).toBe('1');
+  });
+
+  it('retries transient Apple edge failures with production backoff', async () => {
+    vi.useFakeTimers();
+    vi.mocked(appleRequest)
+      .mockResolvedValueOnce({
+        status: 500,
+        statusText: 'Internal Server Error',
+        headers: {},
+        rawHeaders: [],
+        body: '<html>edge failure</html>',
+      })
+      .mockResolvedValueOnce({
+        status: 404,
+        statusText: 'Not Found',
+        headers: {},
+        rawHeaders: [],
+        body: '<html>edge failure</html>',
+      })
+      .mockResolvedValueOnce(successfulResponse());
+
+    const result = authenticate(
+      'test@example.com',
+      'password',
+      undefined,
+      undefined,
+      'AABBCCDDEEFF',
+    );
+
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(appleRequest).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(20_000);
+    await expect(result).resolves.toMatchObject({
+      directoryServicesIdentifier: '123',
+    });
+    expect(appleRequest).toHaveBeenCalledTimes(3);
+    expect(signSAPAction).toHaveBeenCalledTimes(3);
+  });
+
+  it('honors Retry-After when Apple rate limits authentication', async () => {
+    vi.useFakeTimers();
+    vi.mocked(appleRequest)
+      .mockResolvedValueOnce({
+        status: 429,
+        statusText: 'Too Many Requests',
+        headers: { 'retry-after': '2' },
+        rawHeaders: [],
+        body: '',
+      })
+      .mockResolvedValueOnce(successfulResponse());
+
+    const result = authenticate(
+      'test@example.com',
+      'password',
+      undefined,
+      undefined,
+      'AABBCCDDEEFF',
+    );
+
+    await vi.advanceTimersByTimeAsync(1999);
+    expect(appleRequest).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    await expect(result).resolves.toMatchObject({
+      directoryServicesIdentifier: '123',
+    });
+    expect(appleRequest).toHaveBeenCalledTimes(2);
   });
 });

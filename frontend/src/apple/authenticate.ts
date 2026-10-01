@@ -12,6 +12,8 @@ const BAD_LOGIN_MESSAGE = 'MZFinance.BadLogin.Configurator_message';
 const AUTHENTICATION_PATH = '/WebObjects/MZFinance.woa/wa/authenticate';
 const MAX_REDIRECTS = 3;
 const MAX_TRANSPORT_ATTEMPTS = 3;
+const AUTHENTICATION_RETRY_DELAY_MS = 10_000;
+const MAX_AUTHENTICATION_RETRY_DELAY_MS = 30_000;
 
 export class AuthenticationError extends Error {
   constructor(
@@ -43,7 +45,30 @@ function validAuthenticationRedirect(value: string): URL | undefined {
 }
 
 function transientAuthenticationStatus(status: number): boolean {
-  return status === 204 || status === 404 || status >= 500;
+  return status === 204 || status === 404 || status === 429 || status >= 500;
+}
+
+function authenticationRetryDelay(
+  response: AppleResponse,
+  attempt: number,
+): number {
+  const fallback = Math.min(
+    AUTHENTICATION_RETRY_DELAY_MS * 2 ** (attempt - 1),
+    MAX_AUTHENTICATION_RETRY_DELAY_MS,
+  );
+  const retryAfter = response.headers['retry-after']?.trim();
+  if (!retryAfter) return fallback;
+
+  const seconds = Number(retryAfter);
+  const requested = Number.isFinite(seconds)
+    ? seconds * 1000
+    : Date.parse(retryAfter) - Date.now();
+  if (!Number.isFinite(requested) || requested < 0) return fallback;
+
+  return Math.min(
+    Math.max(requested, 1000),
+    MAX_AUTHENTICATION_RETRY_DELAY_MS,
+  );
 }
 
 function sleep(milliseconds: number): Promise<void> {
@@ -83,7 +108,7 @@ async function sendSignedAuthenticationRequest(
       return response;
     }
     if (attempt < MAX_TRANSPORT_ATTEMPTS) {
-      await sleep(attempt * 250);
+      await sleep(authenticationRetryDelay(response, attempt));
     }
   }
   return lastResponse as AppleResponse;
