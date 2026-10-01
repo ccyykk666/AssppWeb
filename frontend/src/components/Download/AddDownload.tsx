@@ -7,7 +7,7 @@ import { useAccounts } from "../../hooks/useAccounts";
 import { useDownloadAction } from "../../hooks/useDownloadAction";
 import { useSettingsStore } from "../../store/settings";
 import { useToastStore } from "../../store/toast";
-import { lookupApp } from "../../api/search";
+import { lookupApp, lookupLatestAppVersion } from "../../api/search";
 import { listVersions } from "../../apple/versionFinder";
 import { countryCodeMap, storeIdToCountry } from "../../apple/config";
 import { firstAccountCountry } from "../../utils/account";
@@ -94,6 +94,7 @@ export default function AddDownload() {
       }
       setApp(result);
       setStep("ready");
+      void lookupLatestAppVersion(result.id, country).catch(() => undefined);
     } catch (e) {
       addToast(getErrorMessage(e, t("downloads.add.lookupFailed")), "error");
     } finally {

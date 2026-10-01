@@ -1,15 +1,90 @@
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useAccounts } from "./useAccounts";
 import { useToastStore } from "../store/toast";
 import { useDownloadsStore } from "../store/downloads";
 import { getDownloadInfo } from "../apple/download";
-import { purchaseApp } from "../apple/purchase";
+import {
+  purchaseApp,
+  PurchaseError,
+  type PurchaseResult,
+} from "../apple/purchase";
 import { authenticate } from "../apple/authenticate";
 import { apiPost, apiGet } from "../api/client";
 import { accountHash } from "../utils/account";
 import { getErrorMessage } from "../utils/error";
 import { getAccountContext } from "../utils/toast";
 import type { Account, Software } from "../types";
+
+interface DownloadSettings {
+  maxDownloadMB: number;
+}
+
+interface LicenseDependencies {
+  purchase: typeof purchaseApp;
+  renew: typeof authenticate;
+}
+
+type UpdateAccount = (account: Account) => Promise<void>;
+
+const EXPIRED_PASSWORD_TOKEN_CODES = new Set(["2034", "2042"]);
+const defaultLicenseDependencies: LicenseDependencies = {
+  purchase: purchaseApp,
+  renew: authenticate,
+};
+
+let downloadSettingsPromise: Promise<DownloadSettings> | undefined;
+
+function loadDownloadSettings(): Promise<DownloadSettings> {
+  if (!downloadSettingsPromise) {
+    downloadSettingsPromise = apiGet<DownloadSettings>("/api/settings").catch(
+      (error) => {
+        downloadSettingsPromise = undefined;
+        throw error;
+      },
+    );
+  }
+  return downloadSettingsPromise;
+}
+
+export async function purchaseWithTokenRefresh(
+  account: Account,
+  app: Software,
+  updateAccount: UpdateAccount,
+  dependencies: LicenseDependencies = defaultLicenseDependencies,
+): Promise<PurchaseResult> {
+  let currentAccount = account;
+  let result: PurchaseResult;
+
+  try {
+    result = await dependencies.purchase(currentAccount, app);
+  } catch (error) {
+    if (
+      !(error instanceof PurchaseError) ||
+      !error.code ||
+      !EXPIRED_PASSWORD_TOKEN_CODES.has(error.code)
+    ) {
+      throw error;
+    }
+
+    currentAccount = await dependencies.renew(
+      account.email,
+      account.password,
+      undefined,
+      account.cookies,
+      account.deviceIdentifier,
+    );
+    // Keep the renewed token even if Apple's follow-up purchase fails.
+    await updateAccount(currentAccount);
+    result = await dependencies.purchase(currentAccount, app);
+  }
+
+  await updateAccount({
+    ...currentAccount,
+    cookies: result.updatedCookies,
+  });
+  return result;
+}
 
 /**
  * Shared hook for download & purchase actions.
@@ -21,6 +96,12 @@ export function useDownloadAction() {
   const fetchTasks = useDownloadsStore((s) => s.fetchTasks);
   const { t } = useTranslation();
 
+  useEffect(() => {
+    // This value is static for the lifetime of the server. Warm it while the
+    // user is reading the app page instead of after they click Download.
+    void loadDownloadSettings().catch(() => undefined);
+  }, []);
+
   async function startDownload(
     account: Account,
     app: Software,
@@ -30,7 +111,7 @@ export function useDownloadAction() {
     const appName = app.name;
 
     try {
-      const settings = await apiGet<{ maxDownloadMB: number }>("/api/settings");
+      const settings = await loadDownloadSettings();
       if (settings.maxDownloadMB > 0 && app.fileSizeBytes) {
         const sizeMB = parseInt(app.fileSizeBytes, 10) / (1024 * 1024);
         if (sizeMB > settings.maxDownloadMB) {
@@ -83,26 +164,13 @@ export function useDownloadAction() {
     const ctx = getAccountContext(account, t);
     const appName = app.name;
 
-    // Silently renew the password token before purchasing.
-    // This prevents "token expired" (2034/2042) errors that would
-    // otherwise require the user to manually re-authenticate.
-    let currentAccount = account;
-    try {
-      const renewed = await authenticate(
-        account.email,
-        account.password,
-        undefined,
-        account.cookies,
-        account.deviceIdentifier,
-      );
-      await updateAccount(renewed);
-      currentAccount = renewed;
-    } catch {
-      // Ignore — proceed with existing token
-    }
-
-    const result = await purchaseApp(currentAccount, app);
-    await updateAccount({ ...currentAccount, cookies: result.updatedCookies });
+    // A valid password token can be reused. Renew only when Apple explicitly
+    // reports that it expired, avoiding a full signed login on every click.
+    const result = await purchaseWithTokenRefresh(
+      account,
+      app,
+      updateAccount,
+    );
 
     if (result.status === 'alreadyOwned') {
       addToast(

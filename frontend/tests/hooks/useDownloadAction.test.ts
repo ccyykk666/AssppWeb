@@ -1,0 +1,102 @@
+import { describe, expect, it, vi } from "vitest";
+import { PurchaseError, type PurchaseResult } from "../../src/apple/purchase";
+import { purchaseWithTokenRefresh } from "../../src/hooks/useDownloadAction";
+import type { Account, Software } from "../../src/types";
+
+vi.mock("../../src/apple/request", () => ({ appleRequest: vi.fn() }));
+
+const account = {
+  email: "test@example.com",
+  password: "password",
+  cookies: [],
+  deviceIdentifier: "AABBCCDDEEFF",
+  passwordToken: "old-token",
+} as unknown as Account;
+const app = { id: 123, name: "Test" } as Software;
+const purchased: PurchaseResult = {
+  status: "acquired",
+  updatedCookies: [
+    {
+      name: "session",
+      value: "new",
+      path: "/",
+      httpOnly: true,
+      secure: true,
+    },
+  ],
+};
+
+describe("purchaseWithTokenRefresh", () => {
+  it("uses a valid password token without authenticating again", async () => {
+    const purchase = vi.fn().mockResolvedValue(purchased);
+    const renew = vi.fn();
+    const updateAccount = vi.fn().mockResolvedValue(undefined);
+
+    await expect(
+      purchaseWithTokenRefresh(account, app, updateAccount, {
+        purchase,
+        renew,
+      }),
+    ).resolves.toBe(purchased);
+
+    expect(purchase).toHaveBeenCalledOnce();
+    expect(renew).not.toHaveBeenCalled();
+    expect(updateAccount).toHaveBeenCalledOnce();
+    expect(updateAccount).toHaveBeenCalledWith({
+      ...account,
+      cookies: purchased.updatedCookies,
+    });
+  });
+
+  it.each(["2034", "2042"])(
+    "renews and retries once after Apple reports expired token %s",
+    async (code) => {
+      const renewed = { ...account, passwordToken: "renewed-token" };
+      const purchase = vi
+        .fn()
+        .mockRejectedValueOnce(new PurchaseError("expired", code))
+        .mockResolvedValueOnce(purchased);
+      const renew = vi.fn().mockResolvedValue(renewed);
+      const updateAccount = vi.fn().mockResolvedValue(undefined);
+
+      await expect(
+        purchaseWithTokenRefresh(account, app, updateAccount, {
+          purchase,
+          renew,
+        }),
+      ).resolves.toBe(purchased);
+
+      expect(purchase).toHaveBeenNthCalledWith(1, account, app);
+      expect(renew).toHaveBeenCalledWith(
+        account.email,
+        account.password,
+        undefined,
+        account.cookies,
+        account.deviceIdentifier,
+      );
+      expect(purchase).toHaveBeenNthCalledWith(2, renewed, app);
+      expect(updateAccount).toHaveBeenNthCalledWith(1, renewed);
+      expect(updateAccount).toHaveBeenNthCalledWith(2, {
+        ...renewed,
+        cookies: purchased.updatedCookies,
+      });
+    },
+  );
+
+  it("does not hide unrelated purchase errors", async () => {
+    const error = new PurchaseError("unavailable", "2059");
+    const purchase = vi.fn().mockRejectedValue(error);
+    const renew = vi.fn();
+    const updateAccount = vi.fn().mockResolvedValue(undefined);
+
+    await expect(
+      purchaseWithTokenRefresh(account, app, updateAccount, {
+        purchase,
+        renew,
+      }),
+    ).rejects.toBe(error);
+
+    expect(renew).not.toHaveBeenCalled();
+    expect(updateAccount).not.toHaveBeenCalled();
+  });
+});
