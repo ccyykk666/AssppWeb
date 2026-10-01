@@ -73,11 +73,11 @@ describe('Apple release history', () => {
     const [url, options] = fetchMock.mock.calls[0];
     expect(url.hostname).toBe('apps.apple.com');
     expect(url.pathname).toBe('/cn/app/id123456789');
-    expect(url.searchParams.get('l')).toBe('zh-Hans-CN');
     expect(options.redirect).toBe('manual');
+    expect(options.headers['Accept-Language']).toBe('zh-Hans-CN');
   });
 
-  it('follows only Apple canonical redirects and preserves the language', async () => {
+  it('follows only Apple canonical redirects and preserves the language header', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({
         ok: false,
@@ -101,8 +101,9 @@ describe('Apple release history', () => {
     );
     expect(response.status).toBe(200);
     const redirectedUrl = fetchMock.mock.calls[1][0] as URL;
+    const redirectedOptions = fetchMock.mock.calls[1][1];
     expect(redirectedUrl.hostname).toBe('apps.apple.com');
-    expect(redirectedUrl.searchParams.get('l')).toBe('zh-Hans-CN');
+    expect(redirectedOptions.headers['Accept-Language']).toBe('zh-Hans-CN');
   });
 
   it.each([

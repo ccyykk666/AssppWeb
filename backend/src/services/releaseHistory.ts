@@ -129,12 +129,12 @@ export async function fetchReleaseHistory(
   let url = new URL(
     `https://apps.apple.com/${country.toLowerCase()}/app/id${appId}`,
   );
-  url.searchParams.set('l', language);
   let response: Response | undefined;
   for (let redirectCount = 0; redirectCount <= 2; redirectCount++) {
     response = await fetch(url, {
       headers: {
         Accept: 'text/html,application/xhtml+xml',
+        'Accept-Language': language,
         'User-Agent': 'Mozilla/5.0 (compatible; AssppWeb/1.0)',
       },
       redirect: 'manual',
@@ -146,9 +146,6 @@ export async function fetchReleaseHistory(
     const nextUrl = new URL(location, url);
     if (nextUrl.hostname !== 'apps.apple.com' || nextUrl.protocol !== 'https:') {
       throw new Error('Apple App Store redirected to an unexpected host');
-    }
-    if (!nextUrl.searchParams.has('l')) {
-      nextUrl.searchParams.set('l', language);
     }
     url = nextUrl;
   }
