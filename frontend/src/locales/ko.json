@@ -70,6 +70,7 @@
       "released": "출시일",
       "description": "설명",
       "releaseNotes": "릴리스 노트",
+      "viewReleaseHistory": "모두 보기",
       "screenshots": "스크린샷",
       "ratings": "개의 평가",
       "free": "무료",
@@ -90,6 +91,16 @@
       "retryDetails": "세부 정보 다시 시도",
       "download": "다운로드",
       "downloading": "다운로드 중..."
+    },
+    "releaseHistory": {
+      "title": "업데이트 기록",
+      "loading": "업데이트 기록을 불러오는 중...",
+      "loadFailed": "업데이트 기록을 불러오지 못했습니다",
+      "retry": "다시 시도",
+      "empty": "Apple에서 이 앱의 업데이트 기록을 제공하지 않습니다.",
+      "invalidApp": "앱 ID가 올바르지 않습니다.",
+      "version": "버전 {{version}}",
+      "notesUnavailable": "이 버전의 릴리스 노트가 없습니다."
     }
   },
   "accounts": {

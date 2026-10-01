@@ -70,6 +70,7 @@
       "released": "Released",
       "description": "Description",
       "releaseNotes": "Release Notes",
+      "viewReleaseHistory": "View all",
       "screenshots": "Screenshots",
       "ratings": "ratings",
       "free": "Free",
@@ -90,6 +91,16 @@
       "retryDetails": "Retry details",
       "download": "Download",
       "downloading": "Downloading..."
+    },
+    "releaseHistory": {
+      "title": "Release History",
+      "loading": "Loading release history...",
+      "loadFailed": "Failed to load release history",
+      "retry": "Retry",
+      "empty": "Apple does not provide release history for this app.",
+      "invalidApp": "The app ID is invalid.",
+      "version": "Version {{version}}",
+      "notesUnavailable": "No release notes are available for this version."
     }
   },
   "accounts": {

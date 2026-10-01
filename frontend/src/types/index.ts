@@ -63,6 +63,17 @@ export interface VersionMetadata {
   releaseDateSource?: 'plist' | 'archive';
 }
 
+export interface ReleaseHistoryEntry {
+  version: string;
+  releaseDate: string;
+  releaseNotes: string;
+}
+
+export interface ReleaseHistoryResult {
+  appName: string;
+  entries: ReleaseHistoryEntry[];
+}
+
 export interface DownloadTask {
   id: string;
   software: Software;

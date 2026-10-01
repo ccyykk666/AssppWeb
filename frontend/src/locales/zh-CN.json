@@ -70,6 +70,7 @@
       "released": "发布日期",
       "description": "描述",
       "releaseNotes": "更新日志",
+      "viewReleaseHistory": "查看全部",
       "screenshots": "屏幕截图",
       "ratings": "个评分",
       "free": "免费",
@@ -90,6 +91,16 @@
       "retryDetails": "重试获取详情",
       "download": "下载",
       "downloading": "下载中..."
+    },
+    "releaseHistory": {
+      "title": "更新记录",
+      "loading": "正在加载更新记录...",
+      "loadFailed": "更新记录加载失败",
+      "retry": "重试",
+      "empty": "Apple 暂未提供该软件的历史更新记录。",
+      "invalidApp": "软件 ID 无效。",
+      "version": "版本 {{version}}",
+      "notesUnavailable": "此版本暂无更新日志。"
     }
   },
   "accounts": {

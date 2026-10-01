@@ -1,5 +1,5 @@
-import { apiGet } from "./client";
-import type { Software } from "../types";
+import { apiGet } from './client';
+import type { ReleaseHistoryResult, Software } from '../types';
 
 export async function searchApps(
   term: string,
@@ -70,4 +70,26 @@ export async function lookupLatestAppVersion(
     .finally(() => catalogVersionInFlight.delete(key))
     .catch(() => undefined);
   return request;
+}
+
+const appleLanguageMap: Record<string, string> = {
+  'zh-CN': 'zh-Hans-CN',
+  'zh-TW': 'zh-Hant-TW',
+  'en-US': 'en-US',
+  ja: 'ja-JP',
+  ko: 'ko-KR',
+  ru: 'ru-RU',
+};
+
+export async function getReleaseHistory(
+  id: number,
+  country: string,
+  language: string,
+): Promise<ReleaseHistoryResult> {
+  const params = new URLSearchParams({
+    id: String(id),
+    country: country.toUpperCase(),
+    language: appleLanguageMap[language] ?? 'en-US',
+  });
+  return apiGet<ReleaseHistoryResult>(`/api/release-history?${params}`);
 }

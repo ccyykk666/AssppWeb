@@ -70,6 +70,7 @@
       "released": "リリース日",
       "description": "説明",
       "releaseNotes": "リリースノート",
+      "viewReleaseHistory": "すべて表示",
       "screenshots": "スクリーンショット",
       "ratings": "件の評価",
       "free": "無料",
@@ -90,6 +91,16 @@
       "retryDetails": "詳細を再取得",
       "download": "ダウンロード",
       "downloading": "ダウンロード中..."
+    },
+    "releaseHistory": {
+      "title": "更新履歴",
+      "loading": "更新履歴を読み込んでいます...",
+      "loadFailed": "更新履歴を読み込めませんでした",
+      "retry": "再試行",
+      "empty": "Apple はこのアプリの更新履歴を提供していません。",
+      "invalidApp": "アプリ ID が無効です。",
+      "version": "バージョン {{version}}",
+      "notesUnavailable": "このバージョンのリリースノートはありません。"
     }
   },
   "accounts": {

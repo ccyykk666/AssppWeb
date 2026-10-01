@@ -248,14 +248,23 @@ export default function ProductDetail() {
         )}
 
         {app.releaseNotes && (
-          <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
-            <h2 className="font-semibold text-gray-900 dark:text-white mb-2">
-              {t("search.product.releaseNotes")}
-            </h2>
-            <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line">
+          <Link
+            to={`/search/${app.id}/release-notes`}
+            state={{ app, country }}
+            className="block bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 hover:border-blue-300 dark:hover:border-blue-700 hover:bg-blue-50/40 dark:hover:bg-blue-950/20 transition-colors"
+          >
+            <div className="flex items-center justify-between gap-4 mb-2">
+              <h2 className="font-semibold text-gray-900 dark:text-white">
+                {t('search.product.releaseNotes')}
+              </h2>
+              <span className="text-sm text-blue-600 dark:text-blue-400 whitespace-nowrap">
+                {t('search.product.viewReleaseHistory')} →
+              </span>
+            </div>
+            <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line line-clamp-4">
               {app.releaseNotes}
             </p>
-          </div>
+          </Link>
         )}
 
         {app.screenshotUrls && app.screenshotUrls.length > 0 && (
