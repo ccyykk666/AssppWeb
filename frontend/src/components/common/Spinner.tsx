@@ -1,25 +1,12 @@
 export default function Spinner() {
   return (
-    <svg
-      className="animate-spin h-4 w-4 shrink-0 text-current"
-      fill="none"
-      viewBox="0 0 24 24"
+    <span
+      className="inline-flex h-4 w-[1.125rem] shrink-0 items-center justify-center gap-[2px] text-current"
       aria-hidden="true"
     >
-      <circle
-        className="opacity-20"
-        cx="12"
-        cy="12"
-        r="8.5"
-        stroke="currentColor"
-        strokeWidth="3"
-      />
-      <path
-        d="M12 3.5a8.5 8.5 0 018.5 8.5"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeWidth="3"
-      />
-    </svg>
+      <span className="loading-dot h-[3px] w-[3px] rounded-full bg-current" />
+      <span className="loading-dot loading-dot-delay-1 h-[3px] w-[3px] rounded-full bg-current" />
+      <span className="loading-dot loading-dot-delay-2 h-[3px] w-[3px] rounded-full bg-current" />
+    </span>
   );
 }

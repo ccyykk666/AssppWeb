@@ -53,56 +53,23 @@ export default function NavigationProgress() {
     const timer = window.setTimeout(() => {
       setVisible(false);
       setCompleting(false);
-    }, 260);
+    }, 180);
     return () => window.clearTimeout(timer);
   }, [pending, visible]);
 
   if (!visible) return null;
 
   return (
-    <>
-      <style>
-        {`
-          @keyframes navigation-progress {
-            0% { transform: scaleX(0.04); }
-            18% { transform: scaleX(0.32); }
-            48% { transform: scaleX(0.62); }
-            78% { transform: scaleX(0.82); }
-            100% { transform: scaleX(0.92); }
-          }
-          @keyframes navigation-progress-shimmer {
-            from { transform: translateX(-100%); }
-            to { transform: translateX(350%); }
-          }
-          .navigation-progress-running {
-            animation: navigation-progress 8s cubic-bezier(0.1, 0.55, 0.2, 1) forwards;
-          }
-          .navigation-progress-shimmer {
-            animation: navigation-progress-shimmer 1.1s ease-in-out infinite;
-          }
-          @media (prefers-reduced-motion: reduce) {
-            .navigation-progress-running { animation: none; transform: scaleX(0.72); }
-            .navigation-progress-shimmer { animation: none; }
-          }
-        `}
-      </style>
-      <div
-        className={`pointer-events-none fixed inset-x-0 top-0 z-[110] h-[3px] overflow-hidden transition-opacity duration-150 ${
-          completing ? "opacity-0 delay-100" : "opacity-100"
-        }`}
-        role="progressbar"
-        aria-label="Loading"
-      >
-        <div
-          className={`relative h-full origin-left bg-gradient-to-r from-blue-500 via-blue-600 to-cyan-400 shadow-[0_0_8px_rgba(37,99,235,0.55)] ${
-            completing
-              ? "scale-x-100 transition-transform duration-200 ease-out"
-              : "navigation-progress-running"
-          }`}
-        >
-          <span className="navigation-progress-shimmer absolute inset-y-0 right-0 w-1/3 bg-gradient-to-r from-transparent via-white/80 to-transparent" />
-        </div>
+    <div
+      className={`pointer-events-none fixed left-1/2 top-[calc(env(safe-area-inset-top)+1.65rem)] z-[110] -translate-x-1/2 transition-opacity duration-150 md:top-3 ${
+        completing ? "opacity-0" : "opacity-100"
+      }`}
+      role="progressbar"
+      aria-label="Loading"
+    >
+      <div className="h-1 w-[5.5rem] overflow-hidden rounded-full bg-gray-200/80 shadow-sm ring-1 ring-black/5 backdrop-blur-sm dark:bg-gray-700/80 dark:ring-white/10">
+        <span className="navigation-wobble block h-full w-[28%] rounded-full bg-gray-800 dark:bg-gray-100" />
       </div>
-    </>
+    </div>
   );
 }
