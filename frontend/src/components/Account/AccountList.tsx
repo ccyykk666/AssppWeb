@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import PageContainer from "../Layout/PageContainer";
+import Spinner from "../common/Spinner";
 import { useAccountsStore } from "../../store/accounts";
 import { storeIdToCountry } from "../../apple/config";
 
@@ -26,7 +27,8 @@ export default function AccountList() {
       }
     >
       {loading ? (
-        <div className="text-center text-gray-500 dark:text-gray-400 py-12">
+        <div className="flex items-center justify-center gap-2 text-gray-500 dark:text-gray-400 py-12">
+          <Spinner />
           {t("accounts.loading")}
         </div>
       ) : accounts.length === 0 ? (

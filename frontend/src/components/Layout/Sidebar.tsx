@@ -11,6 +11,7 @@ import {
   SystemIcon,
 } from "../common/icons";
 import { useSettingsStore } from "../../store/settings";
+import { preloadRoute } from "../../utils/preloadRoute";
 
 const navItems = [
   { to: "/", label: "home", icon: HomeIcon },
@@ -36,6 +37,8 @@ export default function Sidebar() {
             key={item.to}
             to={item.to}
             end={item.to === "/"}
+            onMouseEnter={() => preloadRoute(item.to)}
+            onFocus={() => preloadRoute(item.to)}
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                 isActive

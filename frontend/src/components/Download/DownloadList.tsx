@@ -36,6 +36,9 @@ export default function DownloadList() {
   const { startDownload } = useDownloadAction();
 
   const [checkingAll, setCheckingAll] = useState(false);
+  const [taskActions, setTaskActions] = useState<
+    Record<string, "pause" | "resume" | "delete">
+  >({});
   const cancelCheckRef = useRef(false);
   const [checkProgress, setCheckProgress] = useState({
     current: 0,
@@ -58,7 +61,24 @@ export default function DownloadList() {
     return timeB - timeA;
   });
 
-  function handleDelete(id: string) {
+  async function handleTaskAction(
+    id: string,
+    action: "pause" | "resume",
+  ) {
+    setTaskActions((current) => ({ ...current, [id]: action }));
+    try {
+      if (action === "pause") await pauseDownload(id);
+      else await resumeDownload(id);
+    } finally {
+      setTaskActions((current) => {
+        const next = { ...current };
+        delete next[id];
+        return next;
+      });
+    }
+  }
+
+  async function handleDelete(id: string) {
     if (!confirm(t("downloads.deleteConfirm"))) return;
 
     const task = tasks.find((t) => t.id === id);
@@ -67,14 +87,22 @@ export default function DownloadList() {
       const account = accounts.find((a) => a.email === accountEmail);
       const ctx = getAccountContext(account, t);
 
-      addToast(
-        t("toast.msg", { appName: task.software.name, ...ctx }),
-        "success",
-        t("toast.title.deleteSuccess"),
-      );
+      setTaskActions((current) => ({ ...current, [id]: "delete" }));
+      try {
+        await deleteDownload(id);
+        addToast(
+          t("toast.msg", { appName: task.software.name, ...ctx }),
+          "success",
+          t("toast.title.deleteSuccess"),
+        );
+      } finally {
+        setTaskActions((current) => {
+          const next = { ...current };
+          delete next[id];
+          return next;
+        });
+      }
     }
-
-    deleteDownload(id);
   }
 
   function handleInstall(task: DownloadTask) {
@@ -162,8 +190,9 @@ export default function DownloadList() {
           <button
             onClick={handleCheckAllUpdates}
             disabled={checkingAll}
-            className="px-4 py-2 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors"
           >
+            {checkingAll && <Spinner />}
             {checkingAll
               ? t("downloads.checkingUpdates")
               : t("downloads.checkUpdates")}
@@ -212,7 +241,8 @@ export default function DownloadList() {
       </div>
 
       {loading && tasks.length === 0 ? (
-        <div className="text-center text-gray-500 dark:text-gray-400 py-12">
+        <div className="flex items-center justify-center gap-2 text-gray-500 dark:text-gray-400 py-12">
+          <Spinner />
           {t("downloads.loading")}
         </div>
       ) : sortedTasks.length === 0 ? (
@@ -272,10 +302,11 @@ export default function DownloadList() {
             <DownloadItem
               key={task.id}
               task={task}
-              onPause={pauseDownload}
-              onResume={resumeDownload}
+              onPause={(id) => void handleTaskAction(id, "pause")}
+              onResume={(id) => void handleTaskAction(id, "resume")}
               onDelete={handleDelete}
               onInstall={handleInstall}
+              pendingAction={taskActions[task.id]}
             />
           ))}
         </div>

@@ -1,6 +1,7 @@
 import { ReactNode, useEffect, useLayoutEffect, useRef } from "react";
 import { useLocation, useNavigationType } from "react-router-dom";
 import { useSearch } from "../../hooks/useSearch";
+import { useNavigationStore } from "../../store/navigation";
 
 interface SavedScrollPosition {
   container: number;
@@ -23,8 +24,13 @@ export default function PageContainer({
   const location = useLocation();
   const navigationType = useNavigationType();
   const clearSearch = useSearch((state) => state.clear);
+  const finishNavigation = useNavigationStore((state) => state.finish);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    finishNavigation();
+  }, [finishNavigation, location.key]);
 
   useLayoutEffect(() => {
     const container = scrollContainerRef.current;

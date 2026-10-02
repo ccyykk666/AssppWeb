@@ -7,6 +7,7 @@ import {
   DownloadsIcon,
   SettingsIcon,
 } from "../common/icons";
+import { preloadRoute } from "../../utils/preloadRoute";
 
 const navItems = [
   { to: "/", label: "home", icon: HomeIcon },
@@ -27,6 +28,8 @@ export default function MobileNav() {
             key={item.to}
             to={item.to}
             end={item.to === "/"}
+            onPointerDown={() => preloadRoute(item.to)}
+            onFocus={() => preloadRoute(item.to)}
             className={({ isActive }) =>
               `flex flex-col items-center gap-0.5 px-2 py-1 text-xs transition-colors ${
                 isActive

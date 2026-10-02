@@ -3,6 +3,7 @@ import { useParams, useLocation, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import PageContainer from "../Layout/PageContainer";
 import AppIcon from "../common/AppIcon";
+import Spinner from "../common/Spinner";
 import { useAccounts } from "../../hooks/useAccounts";
 import { useDownloadAction } from "../../hooks/useDownloadAction";
 import { lookupApp, lookupLatestAppVersion } from "../../api/search";
@@ -71,7 +72,10 @@ export default function ProductDetail() {
   if (loading) {
     return (
       <PageContainer title={t("search.product.title")}>
-        <div className="text-center text-gray-500 py-12">{t("loading")}</div>
+        <div className="flex items-center justify-center gap-2 text-gray-500 py-12">
+          <Spinner />
+          {t("loading")}
+        </div>
       </PageContainer>
     );
   }
@@ -165,8 +169,9 @@ export default function ProductDetail() {
                 <button
                   onClick={handlePurchase}
                   disabled={loadingAction !== null}
-                  className="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
                 >
+                  {loadingAction === "purchase" && <Spinner />}
                   {loadingAction === "purchase"
                     ? t("search.product.processing")
                     : t("search.product.getLicense")}
@@ -175,8 +180,9 @@ export default function ProductDetail() {
               <button
                 onClick={handleDownload}
                 disabled={loadingAction !== null}
-                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
               >
+                {loadingAction === "download" && <Spinner />}
                 {loadingAction === "download"
                   ? t("search.product.processing")
                   : t("search.product.download")}

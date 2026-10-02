@@ -37,7 +37,10 @@ export default function AccountDetail() {
   if (storeLoading) {
     return (
       <PageContainer title={t("accounts.title")}>
-        <div className="text-center text-gray-500 py-12">{t("loading")}</div>
+        <div className="flex items-center justify-center gap-2 text-gray-500 py-12">
+          <Spinner />
+          {t("loading")}
+        </div>
       </PageContainer>
     );
   }

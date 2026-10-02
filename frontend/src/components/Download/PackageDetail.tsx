@@ -7,6 +7,7 @@ import AppIcon from "../common/AppIcon";
 import Badge from "../common/Badge";
 import ProgressBar from "../common/ProgressBar";
 import Modal from "../common/Modal";
+import Spinner from "../common/Spinner";
 import { useDownloads } from "../../hooks/useDownloads";
 import { useAccounts } from "../../hooks/useAccounts";
 import { useDownloadAction } from "../../hooks/useDownloadAction";
@@ -43,6 +44,9 @@ export default function PackageDetail() {
   const { startDownload } = useDownloadAction();
 
   const [checkingUpdate, setCheckingUpdate] = useState(false);
+  const [taskAction, setTaskAction] = useState<
+    "pause" | "resume" | "delete" | "update" | null
+  >(null);
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [latestApp, setLatestApp] = useState<Software | null>(null);
   const [availableVersions, setAvailableVersions] = useState<string[]>([]);
@@ -86,9 +90,14 @@ export default function PackageDetail() {
 
   async function handleDelete() {
     if (!confirm(t("downloads.package.deleteConfirm"))) return;
-    await deleteDownload(task!.id);
-    toastAction("toast.title.deleteSuccess", "success");
-    navigate("/downloads");
+    setTaskAction("delete");
+    try {
+      await deleteDownload(task!.id);
+      toastAction("toast.title.deleteSuccess", "success");
+      navigate("/downloads");
+    } finally {
+      setTaskAction(null);
+    }
   }
 
   async function handleShare(e: React.MouseEvent) {
@@ -158,7 +167,7 @@ export default function PackageDetail() {
 
   async function handleConfirmUpdate() {
     if (!task || !account || !latestApp) return;
-    setShowUpdateModal(false);
+    setTaskAction("update");
     try {
       const isLatest =
         availableVersions.length > 0 &&
@@ -169,9 +178,22 @@ export default function PackageDetail() {
         isLatest ? undefined : selectedVersion,
       );
       await deleteDownload(task.id);
+      setShowUpdateModal(false);
       navigate("/downloads");
     } catch {
       addToast(t("downloads.package.updateFailed"), "error");
+    } finally {
+      setTaskAction(null);
+    }
+  }
+
+  async function handleTaskAction(action: "pause" | "resume") {
+    setTaskAction(action);
+    try {
+      if (action === "pause") await pauseDownload(task.id);
+      else await resumeDownload(task.id);
+    } finally {
+      setTaskAction(null);
     }
   }
 
@@ -334,8 +356,9 @@ export default function PackageDetail() {
                 <button
                   onClick={handleCheckUpdate}
                   disabled={checkingUpdate}
-                  className="px-4 py-2 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors"
+                  className="inline-flex items-center gap-2 px-4 py-2 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors"
                 >
+                  {checkingUpdate && <Spinner />}
                   {checkingUpdate
                     ? t("downloads.package.checkingUpdate")
                     : t("downloads.package.checkUpdate")}
@@ -384,24 +407,30 @@ export default function PackageDetail() {
             )}
             {isActive && (
               <button
-                onClick={() => pauseDownload(task.id)}
-                className="px-4 py-2 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                onClick={() => void handleTaskAction("pause")}
+                disabled={taskAction !== null}
+                className="inline-flex items-center gap-2 px-4 py-2 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 transition-colors"
               >
+                {taskAction === "pause" && <Spinner />}
                 {t("downloads.package.pause")}
               </button>
             )}
             {isPaused && (
               <button
-                onClick={() => resumeDownload(task.id)}
-                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                onClick={() => void handleTaskAction("resume")}
+                disabled={taskAction !== null}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
               >
+                {taskAction === "resume" && <Spinner />}
                 {t("downloads.package.resume")}
               </button>
             )}
             <button
               onClick={handleDelete}
-              className="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
+              disabled={taskAction !== null}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
             >
+              {taskAction === "delete" && <Spinner />}
               {t("downloads.package.delete")}
             </button>
           </div>
@@ -488,8 +517,10 @@ export default function PackageDetail() {
             </button>
             <button
               onClick={handleConfirmUpdate}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
+              disabled={taskAction === "update"}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
             >
+              {taskAction === "update" && <Spinner />}
               {t("downloads.package.update")}
             </button>
           </div>

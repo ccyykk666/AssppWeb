@@ -8,7 +8,10 @@ import MobileNav from "./components/Layout/MobileNav";
 import MobileHeader from "./components/Layout/MobileHeader";
 import ToastContainer from "./components/common/ToastContainer";
 import GlobalDownloadNotifier from "./components/common/GlobalDownloadNotifier";
+import NavigationSpinner from "./components/common/NavigationSpinner";
+import Spinner from "./components/common/Spinner";
 import PasswordGate from "./components/Auth/PasswordGate";
+import { preloadLightweightRoutes } from "./utils/preloadRoute";
 
 const HomePage = lazy(() => import("./components/Welcome/HomePage"));
 const AccountList = lazy(() => import("./components/Account/AccountList"));
@@ -30,7 +33,8 @@ const SettingsPage = lazy(() => import("./components/Settings/SettingsPage"));
 function Loading() {
   const { t } = useTranslation();
   return (
-    <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+    <div className="flex flex-1 items-center justify-center gap-2 p-8 text-gray-500 dark:text-gray-400">
+      <Spinner />
       {t("loading")}
     </div>
   );
@@ -60,11 +64,17 @@ export default function App() {
     return () => mediaQuery.removeEventListener("change", applyTheme);
   }, [theme]);
 
+  useEffect(() => {
+    const timer = window.setTimeout(preloadLightweightRoutes, 800);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   return (
     <PasswordGate>
       <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex text-gray-900 dark:text-gray-100 transition-colors duration-200">
         <ToastContainer />
         <GlobalDownloadNotifier />
+        <NavigationSpinner />
 
         <Sidebar />
         <main className="flex-1 flex flex-col min-w-0 safe-top">

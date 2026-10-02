@@ -3,6 +3,7 @@ import { useParams, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import PageContainer from "../Layout/PageContainer";
 import AppIcon from "../common/AppIcon";
+import Spinner from "../common/Spinner";
 import { useAccounts } from "../../hooks/useAccounts";
 import { useDownloadAction } from "../../hooks/useDownloadAction";
 import { useToastStore } from "../../store/toast";
@@ -170,8 +171,9 @@ export default function VersionHistory() {
               <button
                 onClick={handleLoadVersions}
                 disabled={loading || !account}
-                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
               >
+                {loading && <Spinner />}
                 {loading
                   ? t("search.versions.loading")
                   : versions.length > 0
@@ -213,7 +215,8 @@ export default function VersionHistory() {
                       </button>
                     )}
                     {isLoadingMeta && (
-                      <span className="text-xs text-gray-400 dark:text-gray-500">
+                      <span className="inline-flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
+                        <Spinner />
                         {t("search.versions.loading")}
                       </span>
                     )}
@@ -234,8 +237,9 @@ export default function VersionHistory() {
                   <button
                     onClick={() => handleDownloadVersion(versionId)}
                     disabled={isDownloading || downloadingVersion !== null}
-                    className="px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                    className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
                   >
+                    {isDownloading && <Spinner />}
                     {isDownloading
                       ? t("search.versions.downloading")
                       : t("search.versions.download")}

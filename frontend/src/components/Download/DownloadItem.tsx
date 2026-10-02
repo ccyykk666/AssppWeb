@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import AppIcon from "../common/AppIcon";
 import Badge from "../common/Badge";
 import ProgressBar from "../common/ProgressBar";
+import Spinner from "../common/Spinner";
 import { getInstallInfo } from "../../api/install";
 import type { DownloadTask } from "../../types";
 
@@ -12,6 +13,7 @@ interface DownloadItemProps {
   onResume: (id: string) => void;
   onDelete: (id: string) => void;
   onInstall: (task: DownloadTask) => void;
+  pendingAction?: "pause" | "resume" | "delete";
 }
 
 export default function DownloadItem({
@@ -20,6 +22,7 @@ export default function DownloadItem({
   onResume,
   onDelete,
   onInstall,
+  pendingAction,
 }: DownloadItemProps) {
   const { t } = useTranslation();
 
@@ -77,16 +80,20 @@ export default function DownloadItem({
             {isActive && (
               <button
                 onClick={() => onPause(task.id)}
-                className="px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 shadow-sm transition-colors"
+                disabled={pendingAction !== undefined}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 shadow-sm transition-colors"
               >
+                {pendingAction === "pause" && <Spinner />}
                 {t("downloads.package.pause")}
               </button>
             )}
             {isPaused && (
               <button
                 onClick={() => onResume(task.id)}
-                className="px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-800/60 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/30 shadow-sm transition-colors"
+                disabled={pendingAction !== undefined}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-800/60 rounded-md hover:bg-blue-50 dark:hover:bg-blue-900/30 disabled:opacity-50 shadow-sm transition-colors"
               >
+                {pendingAction === "resume" && <Spinner />}
                 {t("downloads.package.resume")}
               </button>
             )}
@@ -111,8 +118,10 @@ export default function DownloadItem({
             )}
             <button
               onClick={() => onDelete(task.id)}
-              className="px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-white dark:bg-gray-800 border border-red-200 dark:border-red-800/50 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 shadow-sm transition-colors"
+              disabled={pendingAction !== undefined}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-white dark:bg-gray-800 border border-red-200 dark:border-red-800/50 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 shadow-sm transition-colors"
             >
+              {pendingAction === "delete" && <Spinner />}
               {t("downloads.package.delete")}
             </button>
           </div>

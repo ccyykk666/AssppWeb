@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import PageContainer from "../Layout/PageContainer";
 import AppIcon from "../common/AppIcon";
 import CountrySelect from "../common/CountrySelect";
+import Spinner from "../common/Spinner";
 import { useAccounts } from "../../hooks/useAccounts";
 import { useDownloadAction } from "../../hooks/useDownloadAction";
 import { useSettingsStore } from "../../store/settings";
@@ -161,8 +162,9 @@ export default function AddDownload() {
               <button
                 type="submit"
                 disabled={isLoading || !bundleId.trim()}
-                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
               >
+                {loadingAction === "lookup" && <Spinner />}
                 {loadingAction === "lookup"
                   ? t("downloads.add.lookingUp")
                   : t("downloads.add.lookup")}
@@ -271,8 +273,9 @@ export default function AddDownload() {
                 <button
                   onClick={handleGetLicense}
                   disabled={isLoading || !account}
-                  className="px-3 py-1.5 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="inline-flex items-center gap-2 px-3 py-1.5 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
+                  {loadingAction === "license" && <Spinner />}
                   {loadingAction === "license"
                     ? t("downloads.add.processing")
                     : t("downloads.add.getLicense")}
@@ -282,8 +285,9 @@ export default function AddDownload() {
                 <button
                   onClick={handleLoadVersions}
                   disabled={isLoading || !account}
-                  className="px-3 py-1.5 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-md border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="inline-flex items-center gap-2 px-3 py-1.5 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-md border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
+                  {loadingAction === "versions" && <Spinner />}
                   {loadingAction === "versions"
                     ? t("downloads.add.processing")
                     : t("downloads.add.selectVersion")}
@@ -292,8 +296,9 @@ export default function AddDownload() {
               <button
                 onClick={handleDownload}
                 disabled={isLoading || !account}
-                className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
+                {loadingAction === "download" && <Spinner />}
                 {loadingAction === "download"
                   ? t("downloads.add.processing")
                   : t("downloads.add.download")}
