@@ -26,6 +26,18 @@ function sourceFiles(directory: string): string[] {
 afterEach(async () => { await i18n.changeLanguage('en-US'); });
 
 describe('supported languages and translation coverage', () => {
+  it('keeps familiar technical labels concise in both languages', async () => {
+    for (const language of ['zh-CN', 'en-US']) {
+      await i18n.changeLanguage(language);
+      expect(i18n.t('search.versions.buildId', { id: '891942197' })).toBe('ID: 891942197');
+      for (const key of ['search.product.bundleId', 'downloads.add.bundleId', 'downloads.package.bundleId']) {
+        expect(i18n.t(key)).toBe('Bundle ID');
+      }
+      expect(i18n.t('accounts.detail.dsid')).toBe('DSID');
+      expect(i18n.t('accounts.detail.pod')).toBe('Pod');
+    }
+  });
+
   it('normalizes previous languages and regional browser preferences', () => {
     expect(['zh', 'zh-TW', 'zh-HK', 'zh-CN'].map(normalizeLanguage))
       .toEqual(['zh-CN', 'zh-CN', 'zh-CN', 'zh-CN']);

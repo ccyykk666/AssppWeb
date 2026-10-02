@@ -97,7 +97,7 @@
       "refresh": "Refresh Versions",
       "loading": "Loading...",
       "loadDetails": "Load details",
-      "buildId": "Build ID: {{id}}",
+      "buildId": "ID: {{id}}",
       "resolvingVersion": "Fetching version number...",
       "detailsUnavailable": "Version details unavailable",
       "retryDetails": "Retry details",

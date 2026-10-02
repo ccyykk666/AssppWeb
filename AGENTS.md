@@ -313,6 +313,8 @@ The `e2e/docker-test.sh` script automates the full flow and scans backend logs f
 
 ### Typography
 
+- Keep familiar technical labels (`ID`, `Bundle ID`, `DSID`, `Pod`) in their concise original form in both UI languages; do not prepend redundant Chinese explanations. Translate descriptive prompts and errors normally.
+
 - System font stack (Inter / SF Pro fallback)
 - Weight scale: `500` (medium, workhorse), `600` (semibold, page titles and key labels only). Avoid `700` in body.
 - Size scale: `xs` (12px), `sm` (14px), `base` (16px), `lg` (18px), `xl` (20px), `2xl` (24px)
