@@ -80,7 +80,7 @@ export default function SearchPage() {
             contextKey={term.trim()}
             pending={loading}
             disabled={loading || !term.trim()}
-            className="h-11 inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white text-base font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+            className="h-11 inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white text-base font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
           />
         </div>
         <div className="flex w-full gap-3 overflow-hidden">

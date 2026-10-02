@@ -139,7 +139,7 @@ describe('search button local feedback', () => {
     const input = screen.getByRole('textbox');
     const button = screen.getByRole('button', { name: '搜索' });
     expect(input).toHaveClass('h-11');
-    expect(button).toHaveClass('h-11', 'text-base', 'rounded-md');
+    expect(button).toHaveClass('h-11', 'text-base', 'rounded-lg');
     expect(input.parentElement).toHaveClass('items-center');
     fireEvent.change(input, { target: { value: 'tiktok' } });
     await act(async () => fireEvent.click(button));
