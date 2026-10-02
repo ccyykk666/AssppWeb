@@ -5,11 +5,12 @@ import PageContainer from "../Layout/PageContainer";
 import AppIcon from "../common/AppIcon";
 import { useAccounts } from "../../hooks/useAccounts";
 import { useDownloadAction } from "../../hooks/useDownloadAction";
+import { useToastStore } from "../../store/toast";
+import { lookupLatestAppVersion } from '../../api/search';
 import { listVersions } from "../../apple/versionFinder";
 import { storeIdToCountry } from "../../apple/config";
 import { resolveVersionMetadata } from "../../apple/versionMetadataResolver";
 import { getErrorMessage } from "../../utils/error";
-import { useToastStore } from "../../store/toast";
 import type { Software, VersionMetadata } from "../../types";
 
 export default function VersionHistory() {
@@ -38,6 +39,7 @@ export default function VersionHistory() {
   >({});
   const [loading, setLoading] = useState(false);
   const [loadingMeta, setLoadingMeta] = useState<Record<string, boolean>>({});
+  const [metaErrors, setMetaErrors] = useState<Record<string, string>>({});
   const [downloadingVersion, setDownloadingVersion] = useState<string | null>(
     null,
   );
@@ -57,8 +59,23 @@ export default function VersionHistory() {
     if (!account || !app) return;
     setLoading(true);
     try {
-      const result = await listVersions(account, app);
+      const [result, latest] = await Promise.all([
+        listVersions(account, app),
+        lookupLatestAppVersion(app.id, country).catch(() => null),
+      ]);
       setVersions(result.versions);
+      if (
+        latest?.bundleID === app.bundleID && latest.version && app.releaseDate &&
+        result.versions.includes(latest.externalVersionId)
+      ) {
+        setVersionMeta((previous) => ({
+          ...previous,
+          [latest.externalVersionId]: {
+            displayVersion: latest.version,
+            releaseDate: app.releaseDate,
+          },
+        }));
+      }
       await updateAccount({ ...account, cookies: result.updatedCookies });
     } catch (e) {
       addToast(getErrorMessage(e, t("search.versions.loadFailed")), "error");
@@ -70,12 +87,23 @@ export default function VersionHistory() {
   async function handleLoadMeta(versionId: string) {
     if (!account || !app || versionMeta[versionId]) return;
     setLoadingMeta((prev) => ({ ...prev, [versionId]: true }));
+    setMetaErrors((previous) => {
+      const next = { ...previous };
+      delete next[versionId];
+      return next;
+    });
     try {
       const result = await resolveVersionMetadata(account, app, versionId);
       setVersionMeta((prev) => ({ ...prev, [versionId]: result.metadata }));
       await updateAccount({ ...account, cookies: result.updatedCookies });
-    } catch {
-      // Silently fail for individual version metadata
+    } catch (error) {
+      setMetaErrors((previous) => ({
+        ...previous,
+        [versionId]: getErrorMessage(
+          error,
+          t('search.versions.detailsUnavailable'),
+        ),
+      }));
     } finally {
       setLoadingMeta((prev) => ({ ...prev, [versionId]: false }));
     }
@@ -159,6 +187,7 @@ export default function VersionHistory() {
             {versions.map((versionId) => {
               const meta = versionMeta[versionId];
               const isLoadingMeta = loadingMeta[versionId];
+              const metaError = metaErrors[versionId];
               const isDownloading = downloadingVersion === versionId;
 
               return (
@@ -175,7 +204,7 @@ export default function VersionHistory() {
                         {new Date(meta.releaseDate).toLocaleDateString()}
                       </p>
                     )}
-                    {!meta && !isLoadingMeta && (
+                    {!meta && !isLoadingMeta && !metaError && (
                       <button
                         onClick={() => handleLoadMeta(versionId)}
                         className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 py-1 transition-colors"
@@ -187,6 +216,19 @@ export default function VersionHistory() {
                       <span className="text-xs text-gray-400 dark:text-gray-500">
                         {t("search.versions.loading")}
                       </span>
+                    )}
+                    {metaError && !isLoadingMeta && (
+                      <div className="mt-1">
+                        <p className="text-xs text-red-600 dark:text-red-400">
+                          {metaError}
+                        </p>
+                        <button
+                          onClick={() => handleLoadMeta(versionId)}
+                          className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 py-1 transition-colors"
+                        >
+                          {t('search.versions.retryDetails')}
+                        </button>
+                      </div>
                     )}
                   </div>
                   <button
