@@ -171,7 +171,7 @@ export default function VersionHistory() {
                 successLabel={t('common.versionsLoaded')}
                 errorLabel={t('search.versions.loadFailed')}
                 contextKey={`${app.id}:${selectedAccount}`}
-                disabled={loading || !account}
+                disabled={loading || downloadingVersion !== null || !account}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
               />
             </div>
@@ -234,7 +234,7 @@ export default function VersionHistory() {
                     successLabel={t('common.downloadQueued')}
                     errorLabel={t('toast.title.downloadFailed')}
                     contextKey={`${app.id}:${selectedAccount}:${versionId}`}
-                    disabled={downloadingVersion !== null}
+                    disabled={loading || downloadingVersion !== null || !account}
                     className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
                   />
                 </div>

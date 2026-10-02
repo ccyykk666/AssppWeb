@@ -169,7 +169,7 @@ export default function ProductDetail() {
                   successLabel={t('common.licenseAcquired')}
                   errorLabel={t('toast.title.licenseFailed')}
                   contextKey={`${app.id}:${selectedAccount}`}
-                  disabled={loadingAction !== null}
+                  disabled={loadingAction !== null || !account}
                   className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
                 />
               )}
@@ -180,7 +180,7 @@ export default function ProductDetail() {
                 successLabel={t('common.downloadQueued')}
                 errorLabel={t('toast.title.downloadFailed')}
                 contextKey={`${app.id}:${selectedAccount}`}
-                disabled={loadingAction !== null}
+                disabled={loadingAction !== null || !account}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
               />
               <Link
