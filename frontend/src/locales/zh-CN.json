@@ -9,7 +9,8 @@
     "licenseAcquired": "已获取",
     "licenseOwned": "已拥有",
     "downloadQueued": "已加入",
-    "versionsLoaded": "已加载"
+    "versionsLoaded": "已加载",
+    "searchComplete": "已完成"
   },
   "auth": {
     "title": "访问密码",

@@ -9,7 +9,8 @@
     "licenseAcquired": "Acquired",
     "licenseOwned": "Owned",
     "downloadQueued": "Queued",
-    "versionsLoaded": "Loaded"
+    "versionsLoaded": "Loaded",
+    "searchComplete": "Done"
   },
   "auth": {
     "title": "Access Password",

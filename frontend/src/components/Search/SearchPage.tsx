@@ -4,11 +4,10 @@ import { useTranslation } from "react-i18next";
 import PageContainer from "../Layout/PageContainer";
 import AppIcon from "../common/AppIcon";
 import CountrySelect from "../common/CountrySelect";
-import Spinner from "../common/Spinner";
+import ActionButton from '../common/ActionButton';
 import { useSearch } from "../../hooks/useSearch";
 import { useAccounts } from "../../hooks/useAccounts";
 import { useSettingsStore } from "../../store/settings";
-import { useToastStore } from "../../store/toast";
 import { countryCodeMap, storeIdToCountry } from "../../apple/config";
 import { firstAccountCountry } from "../../utils/account";
 
@@ -17,7 +16,6 @@ export default function SearchPage() {
   const { defaultCountry, defaultEntity } = useSettingsStore();
   const { accounts } = useAccounts();
   const initialCountry = firstAccountCountry(accounts) ?? defaultCountry;
-  const addToast = useToastStore((s) => s.addToast);
 
   const {
     term,
@@ -29,12 +27,6 @@ export default function SearchPage() {
     search,
     setSearchParam,
   } = useSearch();
-
-  useEffect(() => {
-    if (error) {
-      addToast(error, "error");
-    }
-  }, [error, addToast]);
 
   useEffect(() => {
     if (!country && initialCountry) setSearchParam({ country: initialCountry });
@@ -58,35 +50,43 @@ export default function SearchPage() {
     t(`countries.${a}`, a).localeCompare(t(`countries.${b}`, b)),
   );
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSearch() {
     if (!term.trim()) return;
-    search(term.trim(), activeCountry, activeEntity);
+    await search(term.trim(), activeCountry, activeEntity);
+    // The store retains errors for result rendering; the button shows them locally.
+    const requestError = useSearch.getState().error;
+    if (requestError) throw new Error(requestError);
   }
 
   return (
     <PageContainer title={t("search.title")}>
-      <form onSubmit={handleSubmit} className="space-y-4 mb-6">
-        <div className="flex gap-2">
+      <form onSubmit={(event) => event.preventDefault()} className="space-y-4 mb-6">
+        <div className="flex items-start gap-2">
           <input
             type="text"
             value={term}
+            disabled={loading}
             onChange={(e) => setSearchParam({ term: e.target.value })}
             placeholder={t("search.placeholder")}
-            className="flex-1 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-base text-gray-900 dark:text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+            className="min-w-0 flex-1 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-base text-gray-900 dark:text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
           />
-          <button
+          <ActionButton
             type="submit"
+            action={handleSearch}
+            label={t('search.button')}
+            pendingLabel={t('search.searching')}
+            successLabel={t('common.searchComplete')}
+            errorLabel={t('errors.messages.searchFailed')}
+            contextKey={`${term.trim()}:${activeCountry}:${activeEntity}`}
+            pending={loading}
             disabled={loading || !term.trim()}
             className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
-          >
-            {loading && <Spinner />}
-            {loading ? t("search.searching") : t("search.button")}
-          </button>
+          />
         </div>
         <div className="flex w-full gap-3 overflow-hidden">
           <CountrySelect
             value={activeCountry}
+            disabled={loading}
             onChange={(c) => setSearchParam({ country: c })}
             availableCountryCodes={availableCountryCodes}
             allCountryCodes={allCountryCodes}
@@ -94,6 +94,7 @@ export default function SearchPage() {
           />
           <select
             value={activeEntity}
+            disabled={loading}
             onChange={(e) => setSearchParam({ entity: e.target.value })}
             className="w-1/2 truncate rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-base text-gray-900 dark:text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
           >

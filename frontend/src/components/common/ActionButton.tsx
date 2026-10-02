@@ -10,6 +10,8 @@ interface ActionButtonProps {
   successLabel: string;
   errorLabel: string;
   disabled?: boolean;
+  pending?: boolean;
+  type?: 'button' | 'submit';
   contextKey?: string;
   className?: string;
 }
@@ -17,7 +19,7 @@ interface ActionButtonProps {
 // Keep async feedback at the initiating control, without a floating overlay.
 export default function ActionButton({
   action, label, pendingLabel, successLabel, errorLabel,
-  disabled = false, contextKey, className = '',
+  disabled = false, pending = false, type = 'button', contextKey, className = '',
 }: ActionButtonProps) {
   const { t } = useTranslation();
   const [phase, setPhase] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
@@ -41,7 +43,7 @@ export default function ActionButton({
   }, [contextKey]);
 
   async function handleClick() {
-    if (disabled || running.current) return;
+    if (disabled || pending || running.current) return;
     running.current = true;
     clearTimeout(timer.current);
     const current = ++generation.current;
@@ -62,41 +64,42 @@ export default function ActionButton({
     }
   }
 
-  const message = phase === 'pending' ? pendingLabel
-    : phase === 'success' ? result : phase === 'error' ? t('common.actionFailed') : label;
+  const visiblePhase = pending ? 'pending' : phase;
+  const message = visiblePhase === 'pending' ? pendingLabel
+    : visiblePhase === 'success' ? result : visiblePhase === 'error' ? t('common.actionFailed') : label;
 
   return (
     <div className="inline-flex max-w-full flex-col items-start gap-1.5 align-top">
       <button
-        type="button"
+        type={type}
         onClick={handleClick}
-        disabled={disabled || phase === 'pending'}
-        aria-busy={phase === 'pending'}
-        aria-label={phase === 'idle' ? label : `${label}: ${message}`}
-        aria-describedby={phase === 'error' ? detailsId : undefined}
-        data-feedback={phase}
+        disabled={disabled || visiblePhase === 'pending'}
+        aria-busy={visiblePhase === 'pending'}
+        aria-label={visiblePhase === 'idle' ? label : `${label}: ${message}`}
+        aria-describedby={visiblePhase === 'error' ? detailsId : undefined}
+        data-feedback={visiblePhase}
         className={`action-button ${className}`}
       >
         <span className="grid items-center justify-items-center">
           {/* Reserve the state labels so neighbours do not move on each click. */}
           <span aria-hidden="true" className="invisible col-start-1 row-start-1 whitespace-nowrap">{label}</span>
           <span aria-hidden="true" className="invisible col-start-1 row-start-1 inline-flex items-center gap-2 whitespace-nowrap"><span className="size-4" />{successLabel}</span>
-          <span key={phase} className="action-button-content col-start-1 row-start-1 inline-flex items-center gap-2 whitespace-nowrap">
-            {phase === 'pending' && <Spinner />}
-            {(phase === 'success' || phase === 'error') && (
+          <span key={visiblePhase} className="action-button-content col-start-1 row-start-1 inline-flex items-center gap-2 whitespace-nowrap">
+            {visiblePhase === 'pending' && <Spinner />}
+            {(visiblePhase === 'success' || visiblePhase === 'error') && (
               <svg className="size-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                <path className={phase === 'success' ? 'action-check' : undefined} strokeLinecap="round" strokeLinejoin="round" d={phase === 'success' ? 'M5 12l4 4L19 6' : 'M6 6l12 12M18 6L6 18'} />
+                <path className={visiblePhase === 'success' ? 'action-check' : undefined} strokeLinecap="round" strokeLinejoin="round" d={visiblePhase === 'success' ? 'M5 12l4 4L19 6' : 'M6 6l12 12M18 6L6 18'} />
               </svg>
             )}
-            {phase !== 'pending' && message}
+            {visiblePhase !== 'pending' && message}
           </span>
         </span>
       </button>
       <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
-        {phase === 'success' ? `${label}: ${result}` : ''}
+        {visiblePhase === 'success' ? `${label}: ${result}` : ''}
       </span>
-      <span className="sr-only" role="alert" aria-atomic="true">{phase === 'error' ? errorLabel : ''}</span>
-      {phase === 'error' && (
+      <span className="sr-only" role="alert" aria-atomic="true">{visiblePhase === 'error' ? errorLabel : ''}</span>
+      {visiblePhase === 'error' && (
         <details id={detailsId} className="action-error w-0 min-w-full text-xs text-red-600 dark:text-red-400">
           <summary className="cursor-pointer py-1 focus-visible:outline-2 focus-visible:outline-offset-2">{t('common.errorDetails')}</summary>
           <p role="alert" className="max-h-40 overflow-y-auto pt-1 leading-relaxed [overflow-wrap:anywhere]">{error}</p>

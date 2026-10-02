@@ -238,17 +238,6 @@ export default function ProductDetail() {
           </dl>
         </div>
 
-        {app.description && (
-          <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
-            <h2 className="font-semibold text-gray-900 dark:text-white mb-2">
-              {t("search.product.description")}
-            </h2>
-            <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line">
-              {app.description}
-            </p>
-          </div>
-        )}
-
         {app.releaseNotes && (
           <Link
             to={`/search/${app.id}/release-notes`}
@@ -267,6 +256,17 @@ export default function ProductDetail() {
               {app.releaseNotes}
             </p>
           </Link>
+        )}
+
+        {app.description && (
+          <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
+            <h2 className="font-semibold text-gray-900 dark:text-white mb-2">
+              {t("search.product.description")}
+            </h2>
+            <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-line">
+              {app.description}
+            </p>
+          </div>
         )}
 
         {app.screenshotUrls && app.screenshotUrls.length > 0 && (
