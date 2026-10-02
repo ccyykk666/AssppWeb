@@ -8,8 +8,7 @@ import MobileNav from "./components/Layout/MobileNav";
 import MobileHeader from "./components/Layout/MobileHeader";
 import ToastContainer from "./components/common/ToastContainer";
 import GlobalDownloadNotifier from "./components/common/GlobalDownloadNotifier";
-import NavigationSpinner from "./components/common/NavigationSpinner";
-import Spinner from "./components/common/Spinner";
+import NavigationProgress from "./components/common/NavigationProgress";
 import PasswordGate from "./components/Auth/PasswordGate";
 import { preloadLightweightRoutes } from "./utils/preloadRoute";
 
@@ -33,9 +32,21 @@ const SettingsPage = lazy(() => import("./components/Settings/SettingsPage"));
 function Loading() {
   const { t } = useTranslation();
   return (
-    <div className="flex flex-1 items-center justify-center gap-2 p-8 text-gray-500 dark:text-gray-400">
-      <Spinner />
-      {t("loading")}
+    <div
+      className="flex-1 p-6 sm:p-8"
+      role="status"
+      aria-label={t("loading")}
+      aria-busy="true"
+    >
+      <div className="mx-auto max-w-5xl space-y-5 animate-pulse motion-reduce:animate-none">
+        <div className="h-7 w-32 rounded-md bg-gray-200 dark:bg-gray-800" />
+        <div className="h-24 rounded-xl bg-gray-100 dark:bg-gray-900" />
+        <div className="space-y-3 rounded-xl border border-gray-200 dark:border-gray-800 p-4">
+          <div className="h-4 w-2/3 rounded bg-gray-200 dark:bg-gray-800" />
+          <div className="h-4 w-1/2 rounded bg-gray-100 dark:bg-gray-900" />
+          <div className="h-4 w-3/4 rounded bg-gray-100 dark:bg-gray-900" />
+        </div>
+      </div>
     </div>
   );
 }
@@ -74,7 +85,7 @@ export default function App() {
       <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex text-gray-900 dark:text-gray-100 transition-colors duration-200">
         <ToastContainer />
         <GlobalDownloadNotifier />
-        <NavigationSpinner />
+        <NavigationProgress />
 
         <Sidebar />
         <main className="flex-1 flex flex-col min-w-0 safe-top">
