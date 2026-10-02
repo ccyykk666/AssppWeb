@@ -4,6 +4,7 @@ import PageContainer from "../Layout/PageContainer";
 import AppIcon from "../common/AppIcon";
 import CountrySelect from "../common/CountrySelect";
 import Spinner from "../common/Spinner";
+import ActionButton from '../common/ActionButton';
 import { useAccounts } from "../../hooks/useAccounts";
 import { useDownloadAction } from "../../hooks/useDownloadAction";
 import { useSettingsStore } from "../../store/settings";
@@ -23,9 +24,7 @@ export default function AddDownload() {
     startDownload,
     acquireLicense,
     loadVersions,
-    toastDownloadError,
-    toastLicenseError,
-  } = useDownloadAction();
+  } = useDownloadAction({ localFeedback: true });
 
   const [bundleId, setBundleId] = useState("");
   const [country, setCountry] = useState(defaultCountry);
@@ -107,9 +106,8 @@ export default function AddDownload() {
     if (!account || !app) return;
     setLoadingAction("license");
     try {
-      await acquireLicense(account, app);
-    } catch (e) {
-      toastLicenseError(account, app, e);
+      const result = await acquireLicense(account, app);
+      return result.status === 'alreadyOwned' ? t('common.licenseOwned') : t('common.licenseAcquired');
     } finally {
       setLoadingAction(null);
     }
@@ -123,8 +121,6 @@ export default function AddDownload() {
       setVersions(result.versions);
       await updateAccount({ ...account, cookies: result.updatedCookies });
       setStep("versions");
-    } catch (e) {
-      addToast(getErrorMessage(e, t("downloads.add.versionsFailed")), "error");
     } finally {
       setLoadingAction(null);
     }
@@ -135,8 +131,6 @@ export default function AddDownload() {
     setLoadingAction("download");
     try {
       await startDownload(account, app, selectedVersion || undefined);
-    } catch (e) {
-      toastDownloadError(account, app, e);
     } finally {
       setLoadingAction(null);
     }
@@ -255,6 +249,7 @@ export default function AddDownload() {
                 </label>
                 <select
                   value={selectedVersion}
+                  disabled={isLoading}
                   onChange={(e) => setSelectedVersion(e.target.value)}
                   className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-base text-gray-900 dark:text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 truncate disabled:bg-gray-50 dark:disabled:bg-gray-800/50 disabled:text-gray-500 dark:disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
                 >
@@ -270,39 +265,39 @@ export default function AddDownload() {
 
             <div className="flex flex-wrap gap-2">
               {(app.price === undefined || app.price === 0) && (
-                <button
-                  onClick={handleGetLicense}
+                <ActionButton
+                  action={handleGetLicense}
+                  label={t('downloads.add.getLicense')}
+                  pendingLabel={t('downloads.add.processing')}
+                  successLabel={t('common.licenseAcquired')}
+                  errorLabel={t('toast.title.licenseFailed')}
+                  contextKey={`${app.id}:${selectedAccount}`}
                   disabled={isLoading || !account}
                   className="inline-flex items-center gap-2 px-3 py-1.5 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {loadingAction === "license" && <Spinner />}
-                  {loadingAction === "license"
-                    ? t("downloads.add.processing")
-                    : t("downloads.add.getLicense")}
-                </button>
+                />
               )}
               {step !== "versions" && (
-                <button
-                  onClick={handleLoadVersions}
+                <ActionButton
+                  action={handleLoadVersions}
+                  label={t('downloads.add.selectVersion')}
+                  pendingLabel={t('downloads.add.processing')}
+                  successLabel={t('common.versionsLoaded')}
+                  errorLabel={t('downloads.add.versionsFailed')}
+                  contextKey={`${app.id}:${selectedAccount}`}
                   disabled={isLoading || !account}
                   className="inline-flex items-center gap-2 px-3 py-1.5 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-md border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                >
-                  {loadingAction === "versions" && <Spinner />}
-                  {loadingAction === "versions"
-                    ? t("downloads.add.processing")
-                    : t("downloads.add.selectVersion")}
-                </button>
+                />
               )}
-              <button
-                onClick={handleDownload}
+              <ActionButton
+                action={handleDownload}
+                label={t('downloads.add.download')}
+                pendingLabel={t('downloads.add.processing')}
+                successLabel={t('common.downloadQueued')}
+                errorLabel={t('toast.title.downloadFailed')}
+                contextKey={`${app.id}:${selectedAccount}:${selectedVersion}`}
                 disabled={isLoading || !account}
                 className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {loadingAction === "download" && <Spinner />}
-                {loadingAction === "download"
-                  ? t("downloads.add.processing")
-                  : t("downloads.add.download")}
-              </button>
+              />
             </div>
           </div>
         )}

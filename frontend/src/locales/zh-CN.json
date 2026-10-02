@@ -3,7 +3,13 @@
   "common": {
     "unknown": "未知",
     "notifications": "通知",
-    "closeNotification": "关闭通知"
+    "closeNotification": "关闭通知",
+    "actionFailed": "失败",
+    "errorDetails": "查看原因",
+    "licenseAcquired": "已获取",
+    "licenseOwned": "已拥有",
+    "downloadQueued": "已加入",
+    "versionsLoaded": "已加载"
   },
   "auth": {
     "title": "访问密码",

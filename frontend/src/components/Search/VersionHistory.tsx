@@ -4,9 +4,9 @@ import { useTranslation } from "react-i18next";
 import PageContainer from "../Layout/PageContainer";
 import AppIcon from "../common/AppIcon";
 import Spinner from "../common/Spinner";
+import ActionButton from '../common/ActionButton';
 import { useAccounts } from "../../hooks/useAccounts";
 import { useDownloadAction } from "../../hooks/useDownloadAction";
-import { useToastStore } from "../../store/toast";
 import { lookupLatestAppVersion } from '../../api/search';
 import { storeIdToCountry } from "../../apple/config";
 import { resolveVersionMetadata } from "../../apple/versionMetadataResolver";
@@ -18,9 +18,8 @@ export default function VersionHistory() {
   const location = useLocation();
   const { accounts, updateAccount } = useAccounts();
   const { t, i18n } = useTranslation();
-  const addToast = useToastStore((s) => s.addToast);
-  const { startDownload, loadVersions, toastDownloadError } =
-    useDownloadAction();
+  const { startDownload, loadVersions } =
+    useDownloadAction({ localFeedback: true });
 
   const stateApp = (location.state as { app?: Software; country?: string })
     ?.app;
@@ -78,8 +77,6 @@ export default function VersionHistory() {
         }));
       }
       await updateAccount({ ...account, cookies: result.updatedCookies });
-    } catch (e) {
-      addToast(getErrorMessage(e, t("search.versions.loadFailed")), "error");
     } finally {
       setLoading(false);
     }
@@ -115,8 +112,6 @@ export default function VersionHistory() {
     setDownloadingVersion(versionId);
     try {
       await startDownload(account, app, versionId);
-    } catch (e) {
-      toastDownloadError(account, app, e);
     } finally {
       setDownloadingVersion(null);
     }
@@ -158,6 +153,7 @@ export default function VersionHistory() {
                 </label>
                 <select
                   value={selectedAccount}
+                  disabled={loading || downloadingVersion !== null}
                   onChange={(e) => setSelectedAccount(e.target.value)}
                   className="rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-base text-gray-900 dark:text-white w-full focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
                 >
@@ -168,18 +164,16 @@ export default function VersionHistory() {
                   ))}
                 </select>
               </div>
-              <button
-                onClick={handleLoadVersions}
+              <ActionButton
+                action={handleLoadVersions}
+                label={versions.length > 0 ? t('search.versions.refresh') : t('search.versions.load')}
+                pendingLabel={t('search.versions.loading')}
+                successLabel={t('common.versionsLoaded')}
+                errorLabel={t('search.versions.loadFailed')}
+                contextKey={`${app.id}:${selectedAccount}`}
                 disabled={loading || !account}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
-              >
-                {loading && <Spinner />}
-                {loading
-                  ? t("search.versions.loading")
-                  : versions.length > 0
-                    ? t("search.versions.refresh")
-                    : t("search.versions.load")}
-              </button>
+              />
             </div>
           )
         )}
@@ -190,12 +184,11 @@ export default function VersionHistory() {
               const meta = versionMeta[versionId];
               const isLoadingMeta = loadingMeta[versionId];
               const metaError = metaErrors[versionId];
-              const isDownloading = downloadingVersion === versionId;
 
               return (
                 <div
                   key={versionId}
-                  className="p-4 flex items-center justify-between"
+                  className="p-4 flex items-start justify-between gap-3"
                 >
                   <div>
                     <p className="text-sm font-medium text-gray-900 dark:text-white">
@@ -234,16 +227,16 @@ export default function VersionHistory() {
                       </div>
                     )}
                   </div>
-                  <button
-                    onClick={() => handleDownloadVersion(versionId)}
-                    disabled={isDownloading || downloadingVersion !== null}
+                  <ActionButton
+                    action={() => handleDownloadVersion(versionId)}
+                    label={t('search.versions.download')}
+                    pendingLabel={t('search.versions.downloading')}
+                    successLabel={t('common.downloadQueued')}
+                    errorLabel={t('toast.title.downloadFailed')}
+                    contextKey={`${app.id}:${selectedAccount}:${versionId}`}
+                    disabled={downloadingVersion !== null}
                     className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                  >
-                    {isDownloading && <Spinner />}
-                    {isDownloading
-                      ? t("search.versions.downloading")
-                      : t("search.versions.download")}
-                  </button>
+                  />
                 </div>
               );
             })}

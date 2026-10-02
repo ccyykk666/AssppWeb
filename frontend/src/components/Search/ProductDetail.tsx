@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import PageContainer from "../Layout/PageContainer";
 import AppIcon from "../common/AppIcon";
 import Spinner from "../common/Spinner";
+import ActionButton from '../common/ActionButton';
 import { useAccounts } from "../../hooks/useAccounts";
 import { useDownloadAction } from "../../hooks/useDownloadAction";
 import { lookupApp, lookupLatestAppVersion } from "../../api/search";
@@ -18,9 +19,7 @@ export default function ProductDetail() {
   const {
     startDownload,
     acquireLicense,
-    toastDownloadError,
-    toastLicenseError,
-  } = useDownloadAction();
+  } = useDownloadAction({ localFeedback: true });
 
   const stateApp = (location.state as { app?: Software; country?: string })
     ?.app;
@@ -92,9 +91,8 @@ export default function ProductDetail() {
     if (!account || !app) return;
     setLoadingAction("purchase");
     try {
-      await acquireLicense(account, app);
-    } catch (e) {
-      toastLicenseError(account, app, e);
+      const result = await acquireLicense(account, app);
+      return result.status === 'alreadyOwned' ? t('common.licenseOwned') : t('common.licenseAcquired');
     } finally {
       setLoadingAction(null);
     }
@@ -105,8 +103,6 @@ export default function ProductDetail() {
     setLoadingAction("download");
     try {
       await startDownload(account, app);
-    } catch (e) {
-      toastDownloadError(account, app, e);
     } finally {
       setLoadingAction(null);
     }
@@ -166,27 +162,27 @@ export default function ProductDetail() {
             </div>
             <div className="flex flex-wrap gap-3">
               {(app.price === undefined || app.price === 0) && (
-                <button
-                  onClick={handlePurchase}
+                <ActionButton
+                  action={handlePurchase}
+                  label={t('search.product.getLicense')}
+                  pendingLabel={t('search.product.processing')}
+                  successLabel={t('common.licenseAcquired')}
+                  errorLabel={t('toast.title.licenseFailed')}
+                  contextKey={`${app.id}:${selectedAccount}`}
                   disabled={loadingAction !== null}
                   className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
-                >
-                  {loadingAction === "purchase" && <Spinner />}
-                  {loadingAction === "purchase"
-                    ? t("search.product.processing")
-                    : t("search.product.getLicense")}
-                </button>
+                />
               )}
-              <button
-                onClick={handleDownload}
+              <ActionButton
+                action={handleDownload}
+                label={t('search.product.download')}
+                pendingLabel={t('search.product.processing')}
+                successLabel={t('common.downloadQueued')}
+                errorLabel={t('toast.title.downloadFailed')}
+                contextKey={`${app.id}:${selectedAccount}`}
                 disabled={loadingAction !== null}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-              >
-                {loadingAction === "download" && <Spinner />}
-                {loadingAction === "download"
-                  ? t("search.product.processing")
-                  : t("search.product.download")}
-              </button>
+              />
               <Link
                 to={`/search/${app.id}/versions`}
                 state={{ app, country }}

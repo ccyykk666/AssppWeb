@@ -118,7 +118,7 @@ export async function listVersionsWithLicense(
  * Shared hook for download & purchase actions.
  * Eliminates the duplicated flow across ProductDetail, VersionHistory, and AddDownload.
  */
-export function useDownloadAction() {
+export function useDownloadAction({ localFeedback = false } = {}) {
   const { updateAccount } = useAccounts();
   const addToast = useToastStore((s) => s.addToast);
   const fetchTasks = useDownloadsStore((s) => s.fetchTasks);
@@ -143,25 +143,26 @@ export function useDownloadAction() {
     const ctx = getAccountContext(account, t);
     const appName = app.name;
 
-    try {
-      const settings = await loadDownloadSettings();
+    // Ignore a settings fetch failure, not an explicit size-limit rejection.
+    const settings = await loadDownloadSettings().catch(() => undefined);
+    if (settings) {
       if (settings.maxDownloadMB > 0 && app.fileSizeBytes) {
         const sizeMB = parseInt(app.fileSizeBytes, 10) / (1024 * 1024);
         if (sizeMB > settings.maxDownloadMB) {
+          const message = t("toast.downloadLimit.message", {
+            appName,
+            size: sizeMB.toFixed(2),
+            limit: settings.maxDownloadMB,
+          });
+          if (localFeedback) throw new Error(message);
           addToast(
-            t("toast.downloadLimit.message", {
-              appName,
-              size: sizeMB.toFixed(2),
-              limit: settings.maxDownloadMB,
-            }),
+            message,
             "error",
             t("toast.title.downloadLimit"),
           );
           return;
         }
       }
-    } catch {
-      // Settings fetch failed — backend will still enforce the limit
     }
 
     const { output, updatedCookies } = await getDownloadInfo(
@@ -186,11 +187,13 @@ export function useDownloadAction() {
 
     fetchTasks();
 
-    addToast(
-      t("toast.msg", { appName, ...ctx }),
-      "info",
-      t("toast.title.downloadStarted"),
-    );
+    if (!localFeedback) {
+      addToast(
+        t("toast.msg", { appName, ...ctx }),
+        "info",
+        t("toast.title.downloadStarted"),
+      );
+    }
   }
 
   async function acquireLicense(account: Account, app: Software) {
@@ -206,19 +209,23 @@ export function useDownloadAction() {
     );
 
     if (result.status === 'alreadyOwned') {
-      addToast(
-        t('toast.msg', { appName, ...ctx }),
-        'info',
-        t('toast.title.licenseAlreadyOwned'),
-      );
+      if (!localFeedback) {
+        addToast(
+          t('toast.msg', { appName, ...ctx }),
+          'info',
+          t('toast.title.licenseAlreadyOwned'),
+        );
+      }
       return result;
     }
 
-    addToast(
-      t("toast.msg", { appName, ...ctx }),
-      "success",
-      t("toast.title.licenseSuccess"),
-    );
+    if (!localFeedback) {
+      addToast(
+        t("toast.msg", { appName, ...ctx }),
+        "success",
+        t("toast.title.licenseSuccess"),
+      );
+    }
     return result;
   }
 

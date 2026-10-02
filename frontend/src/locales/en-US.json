@@ -3,7 +3,13 @@
   "common": {
     "unknown": "Unknown",
     "notifications": "Notifications",
-    "closeNotification": "Close notification"
+    "closeNotification": "Close notification",
+    "actionFailed": "Failed",
+    "errorDetails": "View reason",
+    "licenseAcquired": "Acquired",
+    "licenseOwned": "Owned",
+    "downloadQueued": "Queued",
+    "versionsLoaded": "Loaded"
   },
   "auth": {
     "title": "Access Password",
