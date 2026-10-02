@@ -58,6 +58,13 @@ export function getErrorMessage(error: unknown, fallback: string): string {
   message = message.trim();
   const key = errorKeys.get(message);
   if (key) return i18n.t(key);
+  // Already-localized errors must keep their action/stage and useful details,
+  // rather than becoming a generic message merely because they contain HTTP.
+  if (/[\u3400-\u9fff]/.test(message)) return message;
+  const authInvalid = message.match(/^Apple returned HTTP (\d{3}) without a valid plist response$/);
+  if (authInvalid) return i18n.t('errors.auth.invalidResponse', { status: authInvalid[1] });
+  const purchaseHttp = message.match(/^Apple license request failed \(HTTP (\d{3})\)/);
+  if (purchaseHttp) return i18n.t('errors.purchase.httpFailed', { status: purchaseHttp[1] });
 
   const curlCode = message.match(/Request failed with error code (\d+)\b/i)?.[1];
   if (curlCode) {

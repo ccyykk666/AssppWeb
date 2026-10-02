@@ -8,8 +8,8 @@ import ActionButton from '../common/ActionButton';
 import { useSearch } from "../../hooks/useSearch";
 import { useAccounts } from "../../hooks/useAccounts";
 import { useSettingsStore } from "../../store/settings";
-import { countryCodeMap, storeIdToCountry } from "../../apple/config";
 import { firstAccountCountry } from "../../utils/account";
+import { countryCodeMap, storeIdToCountry } from "../../apple/config";
 
 export default function SearchPage() {
   const { t } = useTranslation();
@@ -22,6 +22,7 @@ export default function SearchPage() {
     country,
     entity,
     results,
+    resultsCountry,
     loading,
     error,
     search,
@@ -53,7 +54,7 @@ export default function SearchPage() {
   async function handleSearch() {
     if (!term.trim()) return;
     await search(term.trim(), activeCountry, activeEntity);
-    // The store retains errors for result rendering; the button shows them locally.
+    // The store retains errors for result rendering; the action reports failures.
     const requestError = useSearch.getState().error;
     if (requestError) throw new Error(requestError);
   }
@@ -61,14 +62,14 @@ export default function SearchPage() {
   return (
     <PageContainer title={t("search.title")}>
       <form onSubmit={(event) => event.preventDefault()} className="space-y-4 mb-6">
-        <div className="flex items-start gap-2">
+        <div className="flex items-center gap-2">
           <input
             type="text"
             value={term}
             disabled={loading}
             onChange={(e) => setSearchParam({ term: e.target.value })}
             placeholder={t("search.placeholder")}
-            className="min-w-0 flex-1 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-base text-gray-900 dark:text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+            className="h-11 min-w-0 flex-1 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-base text-gray-900 dark:text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
           />
           <ActionButton
             type="submit"
@@ -77,16 +78,15 @@ export default function SearchPage() {
             pendingLabel={t('search.searching')}
             successLabel={t('common.searchComplete')}
             errorLabel={t('errors.messages.searchFailed')}
-            contextKey={`${term.trim()}:${activeCountry}:${activeEntity}`}
+            contextKey={term.trim()}
             pending={loading}
             disabled={loading || !term.trim()}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+            className="h-11 inline-flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white text-base font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
           />
         </div>
         <div className="flex w-full gap-3 overflow-hidden">
           <CountrySelect
             value={activeCountry}
-            disabled={loading}
             onChange={(c) => setSearchParam({ country: c })}
             availableCountryCodes={availableCountryCodes}
             allCountryCodes={allCountryCodes}
@@ -94,7 +94,6 @@ export default function SearchPage() {
           />
           <select
             value={activeEntity}
-            disabled={loading}
             onChange={(e) => setSearchParam({ entity: e.target.value })}
             className="w-1/2 truncate rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-base text-gray-900 dark:text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
           >
@@ -135,7 +134,7 @@ export default function SearchPage() {
           <Link
             key={app.id}
             to={`/search/${app.id}`}
-            state={{ app, country: activeCountry }}
+            state={{ app, country: resultsCountry || activeCountry }}
             className="block bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 hover:border-gray-300 dark:hover:border-gray-600 transition-colors"
           >
             <div className="flex items-center gap-4">

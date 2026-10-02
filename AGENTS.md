@@ -172,7 +172,7 @@ The backend proxies the bag endpoint via `GET /api/bag?guid=<deviceId>` using No
 - **Alert** — `<Alert type="error|success|warning">` for status messages (replaces inline alert divs)
 - **Modal** — `<Modal open={bool} onClose={fn} title={string}>` for dialog overlays
 - **Spinner** — inline SVG loading spinner for buttons
-- **ActionButton** — async button with local loading/result animations and expandable error details; use instead of global toasts for direct license/download actions
+- **ActionButton** — async button with fixed-size local loading/success animations; failures use the existing error notification bar, never expand the button row. Search inputs and buttons share a 44px height; region/device selectors remain enabled during search, and result links retain the requested storefront.
 - **CountrySelect** — optgroup-based country dropdown with "Available Regions" + "All Regions"
 - **AppIcon** — 3 sizes (40/56/80px), rounded corners, letter fallback
 - **Badge** — color-coded status pill

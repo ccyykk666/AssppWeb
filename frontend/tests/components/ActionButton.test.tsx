@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ActionButton from '../../src/components/common/ActionButton';
+import { useToastStore } from '../../src/store/toast';
 import i18n from '../../src/i18n';
 
 const props = {
@@ -12,7 +13,7 @@ function deferred<T>() {
   const promise = new Promise<T>((done) => { resolve = done; });
   return { promise, resolve };
 }
-beforeEach(async () => { vi.useFakeTimers(); await i18n.changeLanguage('zh-CN'); });
+beforeEach(async () => { vi.useFakeTimers(); useToastStore.setState({ toasts: [] }); await i18n.changeLanguage('zh-CN'); });
 afterEach(async () => { cleanup(); vi.useRealTimers(); await i18n.changeLanguage('en-US'); });
 
 describe('local action feedback', () => {
@@ -35,20 +36,22 @@ describe('local action feedback', () => {
     expect(button).toHaveAttribute('data-feedback', 'idle');
   });
 
-  it('keeps localized failure details nearby, permits retry and clears old details', async () => {
+  it('uses a localized error bar without expanding the button row and permits retry', async () => {
     const action = vi.fn().mockRejectedValueOnce(new Error('Request failed with error code 7: Could not connect to server'))
       .mockResolvedValueOnce(undefined);
     render(<ActionButton {...props} action={action} />);
     await act(async () => { fireEvent.click(screen.getByRole('button')); });
-    const details = document.querySelector('details')!;
-    expect(details).not.toHaveAttribute('open');
-    expect(details).toHaveTextContent('查看原因');
-    expect(details).toHaveTextContent('无法连接到服务器');
+    expect(document.querySelector('details')).toBeNull();
+    expect(useToastStore.getState().toasts).toEqual([
+      expect.objectContaining({ type: 'error', title: props.errorLabel, message: expect.stringContaining('无法连接到服务器') }),
+    ]);
     expect(screen.getByRole('button')).toBeEnabled();
-    expect(screen.getByRole('button')).toHaveAttribute('data-feedback', 'error');
+    expect(screen.getByRole('button')).toHaveAttribute('data-feedback', 'idle');
+    expect(screen.getByRole('button')).toHaveAccessibleName(props.label);
     await act(async () => { fireEvent.click(screen.getByRole('button')); });
     expect(document.querySelector('details')).toBeNull();
     expect(screen.getByRole('button')).toHaveAttribute('data-feedback', 'success');
+    expect(useToastStore.getState().toasts).toHaveLength(1);
   });
 
   it('ignores stale completion after changing account context', async () => {

@@ -10,7 +10,7 @@
     "licenseOwned": "已拥有",
     "downloadQueued": "已加入",
     "versionsLoaded": "已加载",
-    "searchComplete": "已完成"
+    "searchComplete": "已加载"
   },
   "auth": {
     "title": "访问密码",
@@ -534,6 +534,8 @@
       "tooManyRedirects": "重定向次数过多"
     },
     "purchase": {
+      "httpFailed": "Apple 许可证接口返回 HTTP {{status}}，请稍后重试。",
+      "invalidResponse": "Apple 许可证接口返回了无效响应，请稍后重试。",
       "paidNotSupported": "不支持购买付费应用",
       "unavailable": "项目暂时不可用",
       "passwordExpired": "密码令牌已过期",

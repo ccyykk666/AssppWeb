@@ -263,7 +263,7 @@ export default function AddDownload() {
               </div>
             )}
 
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-start gap-2">
               {(app.price === undefined || app.price === 0) && (
                 <ActionButton
                   action={handleGetLicense}

@@ -160,7 +160,7 @@ export default function ProductDetail() {
                 ))}
               </select>
             </div>
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap items-start gap-3">
               {(app.price === undefined || app.price === 0) && (
                 <ActionButton
                   action={handlePurchase}

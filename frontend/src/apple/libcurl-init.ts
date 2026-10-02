@@ -18,7 +18,11 @@ export async function initLibcurl(): Promise<void> {
     libcurl.set_websocket(wsUrl);
     await libcurl.load_wasm();
     initialized = true;
-  })();
+  })().catch((error) => {
+    // A failed warm-up must not poison every later click until page reload.
+    initPromise = null;
+    throw error;
+  });
 
   return initPromise;
 }

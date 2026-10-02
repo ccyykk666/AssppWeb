@@ -17,13 +17,10 @@
 .action-button:active:not(:disabled) { transform: scale(.97) translateY(1px); }
 .action-button:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
 .action-button[data-feedback="pending"]:disabled { opacity: .8; }
-.action-button[data-feedback="success"],
-.action-button[data-feedback="error"] { background: #e5e7eb; color: #374151; }
-.dark .action-button[data-feedback="success"],
-.dark .action-button[data-feedback="error"] { background: #374151; color: #f3f4f6; }
+.action-button[data-feedback="success"] { background: #e5e7eb; color: #374151; }
+.dark .action-button[data-feedback="success"] { background: #374151; color: #f3f4f6; }
 .action-button-content { animation: action-content-in 160ms cubic-bezier(.2,.8,.2,1); }
 .action-check { stroke-dasharray: 24; stroke-dashoffset: 0; animation: action-check-in 240ms ease-out; }
-.action-error { animation: action-content-in 160ms ease-out; }
 @keyframes action-content-in {
   from { opacity: 0; transform: translateY(3px); }
   to { opacity: 1; transform: translateY(0); }
@@ -35,6 +32,6 @@
 @media (prefers-reduced-motion: reduce) {
   .action-button { transition: none; }
   .action-button:active:not(:disabled) { transform: none; }
-  .action-button-content, .action-check, .action-error { animation: none; }
+  .action-button-content, .action-check { animation: none; }
   .action-button .animate-spin { animation: none; }
 }

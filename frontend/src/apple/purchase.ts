@@ -1,9 +1,9 @@
-import type { Account, Software } from "../types";
-import { appleRequest } from "./request";
+import { appleRequest, type AppleResponse } from "./request";
 import { buildPlist, parsePlist } from "./plist";
 import { extractAndMergeCookies } from "./cookies";
 import { purchaseAPIHost } from "./config";
 import i18n from "../i18n";
+import type { Account, Software } from "../types";
 
 const LICENSE_ALREADY_EXISTS_FAILURE_TYPE = '5002';
 
@@ -79,21 +79,45 @@ async function purchaseWithParams(
     "X-Token": account.passwordToken,
   };
 
-  const response = await appleRequest({
-    method: "POST",
-    host,
-    path,
-    headers,
-    body: plistBody,
-    cookies: account.cookies,
-  });
+  let cookies = account.cookies;
+  let response: AppleResponse | undefined;
+  let dict: Record<string, any> | undefined;
+  // Free license acquisition is idempotent (5002 means already owned).
+  // Retry a temporary edge error once, never a valid Apple business response.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    response = await appleRequest({
+      method: 'POST', host, path, headers, body: plistBody, cookies,
+    });
+    cookies = extractAndMergeCookies(response.rawHeaders, cookies);
+    try {
+      const value = parsePlist(response.body);
+      dict = value && typeof value === 'object' && !Array.isArray(value) ? value : undefined;
+    } catch {
+      dict = undefined;
+    }
+    const edgeFailure = response.status === 404 || response.status === 429 || response.status >= 500;
+    if (attempt === 0 && edgeFailure && !dict) {
+      // Do not retry sooner than an explicit server-requested delay. Longer
+      // rate limits are reported to the user rather than blocking the control.
+      const retryAfter = response.headers['retry-after'];
+      const delay = retryAfter ? Number(retryAfter) * 1000 : 1000;
+      if (Number.isFinite(delay) && delay >= 0 && delay <= 3000) {
+        await new Promise((resolve) => setTimeout(resolve, Math.max(delay, 1000)));
+        continue;
+      }
+    }
+    break;
+  }
 
-  const updatedCookies = extractAndMergeCookies(
-    response.rawHeaders,
-    account.cookies,
-  );
+  if (!response || response.status !== 200) {
+    const status = response?.status ?? 0;
+    throw new PurchaseError(i18n.t('errors.purchase.httpFailed', { status }), `HTTP_${status}`);
+  }
+  if (!dict) {
+    throw new PurchaseError(i18n.t('errors.purchase.invalidResponse'), 'INVALID_RESPONSE');
+  }
 
-  const dict = parsePlist(response.body) as Record<string, any>;
+  const updatedCookies = cookies;
 
   if (dict.failureType) {
     const failureType = String(dict.failureType);

@@ -9,6 +9,7 @@ interface SearchState {
   country: string;
   entity: string;
   results: Software[];
+  resultsCountry: string;
   loading: boolean;
   error: string | null;
   setSearchParam: (
@@ -24,6 +25,7 @@ export const useSearch = create<SearchState>((set) => ({
   country: "",
   entity: "",
   results: [],
+  resultsCountry: '',
   loading: false,
   error: null,
   setSearchParam: (param) => set((state) => ({ ...state, ...param })),
@@ -31,11 +33,12 @@ export const useSearch = create<SearchState>((set) => ({
     set({ loading: true, error: null, term, country, entity });
     try {
       const apps = await searchApps(term, country, entity);
-      set({ results: apps });
+      set({ results: apps, resultsCountry: country });
     } catch (e) {
       set({
         error: getErrorMessage(e, i18n.t('errors.messages.searchFailed')),
         results: [],
+        resultsCountry: '',
       });
     } finally {
       set({ loading: false });
@@ -45,16 +48,17 @@ export const useSearch = create<SearchState>((set) => ({
     set({ loading: true, error: null });
     try {
       const app = await lookupApp(bundleId, country);
-      set({ results: app ? [app] : [] });
+      set({ results: app ? [app] : [], resultsCountry: country });
     } catch (e) {
       set({
         error: getErrorMessage(e, i18n.t('errors.messages.lookupFailed')),
         results: [],
+        resultsCountry: '',
       });
     } finally {
       set({ loading: false });
     }
   },
   // 清空关键词、结果和错误信息，但保留选择的国家和设备类型（作为用户偏好）
-  clear: () => set({ term: "", results: [], error: null }),
+  clear: () => set({ term: "", results: [], resultsCountry: '', error: null }),
 }));

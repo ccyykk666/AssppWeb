@@ -1,13 +1,15 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import ProductDetail from '../../src/components/Search/ProductDetail';
+import { useToastStore } from '../../src/store/toast';
 import i18n from '../../src/i18n';
-import type { Software } from '../../src/types';
+import type { Account, Software } from '../../src/types';
 
-vi.mock('../../src/hooks/useAccounts', () => ({ useAccounts: () => ({ accounts: [] }) }));
+const { accountState, acquireLicense } = vi.hoisted(() => ({ accountState: { accounts: [] as Account[] }, acquireLicense: vi.fn() }));
+vi.mock('../../src/hooks/useAccounts', () => ({ useAccounts: () => accountState }));
 vi.mock('../../src/hooks/useDownloadAction', () => ({
-  useDownloadAction: () => ({ startDownload: vi.fn(), acquireLicense: vi.fn() }),
+  useDownloadAction: () => ({ startDownload: vi.fn(), acquireLicense }),
 }));
 vi.mock('../../src/api/search', () => ({ lookupApp: vi.fn(), lookupLatestAppVersion: vi.fn().mockResolvedValue(null) }));
 
@@ -25,10 +27,29 @@ function renderDetail(software: Software) {
   );
 }
 
-beforeEach(async () => { await i18n.changeLanguage('zh-CN'); });
+beforeEach(async () => {
+  accountState.accounts = [];
+  acquireLicense.mockReset();
+  useToastStore.setState({ toasts: [] });
+  await i18n.changeLanguage('zh-CN');
+});
 afterEach(async () => { cleanup(); await i18n.changeLanguage('en-US'); });
 
 describe('product detail section order', () => {
+  it('keeps history in a non-stretching action row after license failure', async () => {
+    accountState.accounts = [{ email: 'test@example.com', store: '143441', firstName: 'Test', lastName: '' } as Account];
+    acquireLicense.mockRejectedValueOnce(new Error('Apple 许可证接口返回 HTTP 404，请稍后重试。'));
+    renderDetail(app);
+    const history = screen.getByRole('link', { name: '历史版本' });
+    expect(history.parentElement).toHaveClass('items-start');
+    await act(async () => fireEvent.click(screen.getByRole('button', { name: '获取许可证' })));
+    expect(screen.getByRole('button', { name: '获取许可证' })).toBeEnabled();
+    expect(document.querySelector('details')).toBeNull();
+    expect(history).toHaveTextContent('历史版本');
+    expect(useToastStore.getState().toasts).toHaveLength(1);
+    expect(useToastStore.getState().toasts[0].type).toBe('error');
+  });
+
   it('places clickable release notes before the description', () => {
     renderDetail(app);
     const releaseNotes = screen.getByRole('heading', { name: '更新日志' });

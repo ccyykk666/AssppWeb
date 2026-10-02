@@ -5,6 +5,14 @@ import { getErrorMessage } from '../../src/utils/error';
 afterEach(async () => { await i18n.changeLanguage('en-US'); });
 
 describe('localized error messages', () => {
+  it('preserves the failing Apple stage instead of hiding it behind a generic HTTP message', async () => {
+    await i18n.changeLanguage('zh-CN');
+    const message = i18n.t('errors.auth.invalidResponse', { status: 404 });
+    expect(getErrorMessage(new Error(message), '失败')).toBe(message);
+    expect(getErrorMessage('Apple returned HTTP 404 without a valid plist response', '失败')).toBe(message);
+    expect(getErrorMessage('Apple license request failed (HTTP 404). Please try again later.', '失败'))
+      .toBe(i18n.t('errors.purchase.httpFailed', { status: 404 }));
+  });
   it('translates the network error from the screenshot and preserves its code', async () => {
     const error = new Error('Request failed with error code 7: Could not connect to server');
     await i18n.changeLanguage('zh-CN');

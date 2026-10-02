@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildPlist } from '../../src/apple/plist';
 import { purchaseApp, PurchaseError } from '../../src/apple/purchase';
 import { appleRequest } from '../../src/apple/request';
@@ -50,6 +50,42 @@ function appleResponse(data: Record<string, unknown>) {
 describe('apple/purchase', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('recovers from one temporary 404 without repeating a successful purchase', async () => {
+    vi.useFakeTimers();
+    vi.mocked(appleRequest).mockResolvedValueOnce({ ...appleResponse({}), status: 404, body: '<html>Not Found</html>' })
+      .mockResolvedValueOnce(appleResponse({ jingleDocType: 'purchaseSuccess', status: 0 }));
+    const result = purchaseApp(account, app);
+    await vi.advanceTimersByTimeAsync(1000);
+    await expect(result).resolves.toMatchObject({ status: 'acquired' });
+    expect(appleRequest).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(appleRequest).mock.calls[1][0].body).toBe(vi.mocked(appleRequest).mock.calls[0][0].body);
+  });
+
+  it('limits repeated 404 errors and reports the license stage', async () => {
+    vi.useFakeTimers();
+    vi.mocked(appleRequest).mockResolvedValue({ ...appleResponse({}), status: 404, body: '' });
+    const result = expect(purchaseApp(account, app)).rejects.toMatchObject({ code: 'HTTP_404', message: expect.stringContaining('Apple license') });
+    await vi.advanceTimersByTimeAsync(1000);
+    await result;
+    expect(appleRequest).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry valid business errors or blindly retry long rate limits', async () => {
+    vi.mocked(appleRequest).mockResolvedValueOnce({ ...appleResponse({ failureType: '2034' }), status: 503 });
+    await expect(purchaseApp(account, app)).rejects.toMatchObject({ code: 'HTTP_503' });
+    expect(appleRequest).toHaveBeenCalledTimes(1);
+    vi.mocked(appleRequest).mockResolvedValueOnce({ ...appleResponse({}), status: 429, body: '', headers: { 'retry-after': '60' } });
+    await expect(purchaseApp(account, app)).rejects.toMatchObject({ code: 'HTTP_429' });
+    expect(appleRequest).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects invalid success responses instead of reporting a license as acquired', async () => {
+    vi.mocked(appleRequest).mockResolvedValueOnce({ ...appleResponse({}), body: '<html>Unexpected page</html>' });
+    await expect(purchaseApp(account, app)).rejects.toMatchObject({ code: 'INVALID_RESPONSE' });
+    expect(appleRequest).toHaveBeenCalledTimes(1);
   });
 
   it('reports a newly acquired license', async () => {

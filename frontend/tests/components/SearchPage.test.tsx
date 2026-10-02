@@ -1,6 +1,6 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import SearchPage from '../../src/components/Search/SearchPage';
 import { searchApps } from '../../src/api/search';
@@ -25,7 +25,7 @@ function renderSearch() {
 beforeEach(async () => {
   vi.clearAllMocks();
   await i18n.changeLanguage('zh-CN');
-  useSearch.setState({ term: '', country: 'US', entity: 'iPhone', results: [], loading: false, error: null });
+  useSearch.setState({ term: '', country: 'US', entity: 'iPhone', results: [], resultsCountry: '', loading: false, error: null });
   useSettingsStore.setState({ defaultCountry: 'US', defaultEntity: 'iPhone' });
   useToastStore.setState({ toasts: [] });
 });
@@ -51,10 +51,10 @@ describe('search button local feedback', () => {
     expect(button.querySelector('.action-button-content svg')).not.toBeNull();
     expect(button).toBeDisabled();
     expect(screen.getByRole('textbox')).toBeDisabled();
-    screen.getAllByRole('combobox').forEach((select) => expect(select).toBeDisabled());
+    screen.getAllByRole('combobox').forEach((select) => expect(select).toBeEnabled());
     await act(async () => resolve([app]));
     expect(button).toHaveAttribute('data-feedback', 'success');
-    expect(button).toHaveAccessibleName('搜索: 已完成');
+    expect(button).toHaveAccessibleName('搜索: 已加载');
     expect(screen.getByRole('link', { name: /TikTok/ })).toHaveAttribute('href', '/search/123');
     expect(useToastStore.getState().toasts).toEqual([]);
   });
@@ -69,21 +69,66 @@ describe('search button local feedback', () => {
     expect(useSearch.getState().term).toBe('tiktok');
   });
 
-  it('keeps failure details at the button and allows retry without a floating toast', async () => {
+  it('uses the original error bar without changing the button layout and allows retry', async () => {
     vi.mocked(searchApps).mockRejectedValueOnce(new Error('Failed to fetch')).mockResolvedValueOnce([app]);
     const user = userEvent.setup();
     renderSearch();
     await user.type(screen.getByRole('textbox'), 'tiktok');
     await user.click(screen.getByRole('button', { name: '搜索' }));
-    const button = screen.getByRole('button', { name: '搜索: 失败' });
+    const button = screen.getByRole('button', { name: '搜索' });
     expect(button).toBeEnabled();
-    expect(document.querySelector('details')).toHaveTextContent('查看原因');
-    expect(document.querySelector('details')).not.toHaveAttribute('open');
-    expect(useToastStore.getState().toasts).toEqual([]);
+    expect(document.querySelector('details')).toBeNull();
+    expect(useToastStore.getState().toasts).toEqual([
+      expect.objectContaining({ type: 'error', title: i18n.t('errors.messages.searchFailed') }),
+    ]);
     await user.click(button);
     expect(button).toHaveAttribute('data-feedback', 'success');
     expect(document.querySelector('details')).toBeNull();
     expect(searchApps).toHaveBeenCalledTimes(2);
+  });
+
+  it('allows filter changes during search while preserving the results storefront', async () => {
+    let resolve!: (apps: Software[]) => void;
+    vi.mocked(searchApps).mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
+    const user = userEvent.setup();
+    function ResultContext() {
+      const location = useLocation();
+      return <p>Result country: {location.state.country}</p>;
+    }
+    render(
+      <MemoryRouter initialEntries={['/search']}>
+        <Routes>
+          <Route path="/search" element={<SearchPage />} />
+          <Route path="/search/:appId" element={<ResultContext />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    await user.type(screen.getByRole('textbox'), 'tiktok');
+    await user.click(screen.getByRole('button', { name: '搜索' }));
+    const [country, entity] = screen.getAllByRole('combobox');
+    await user.selectOptions(country, 'CN');
+    await user.selectOptions(entity, 'iPad');
+    expect(screen.getByRole('button')).toHaveAttribute('data-feedback', 'pending');
+    await act(async () => resolve([app]));
+    expect(country).toHaveValue('CN');
+    expect(entity).toHaveValue('iPad');
+    expect(screen.getByRole('button')).toHaveAccessibleName('搜索: 已加载');
+    expect(searchApps).toHaveBeenCalledExactlyOnceWith('tiktok', 'US', 'iPhone');
+    await user.click(screen.getByRole('link', { name: /TikTok/ }));
+    expect(screen.getByText('Result country: US')).toBeInTheDocument();
+  });
+
+  it('uses equal-height aligned controls across idle, pending and loaded states', async () => {
+    vi.mocked(searchApps).mockResolvedValueOnce([app]);
+    renderSearch();
+    const input = screen.getByRole('textbox');
+    const button = screen.getByRole('button', { name: '搜索' });
+    expect(input).toHaveClass('h-11');
+    expect(button).toHaveClass('h-11', 'text-base', 'rounded-md');
+    expect(input.parentElement).toHaveClass('items-center');
+    fireEvent.change(input, { target: { value: 'tiktok' } });
+    await act(async () => fireEvent.click(button));
+    expect(button).toHaveClass('h-11');
   });
 
   it('does not search blank input by click or Enter', async () => {

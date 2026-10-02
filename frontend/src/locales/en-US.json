@@ -10,7 +10,7 @@
     "licenseOwned": "Owned",
     "downloadQueued": "Queued",
     "versionsLoaded": "Loaded",
-    "searchComplete": "Done"
+    "searchComplete": "Loaded"
   },
   "auth": {
     "title": "Access Password",
@@ -534,6 +534,8 @@
       "tooManyRedirects": "Too many redirects"
     },
     "purchase": {
+      "httpFailed": "Apple license request failed (HTTP {{status}}). Please try again later.",
+      "invalidResponse": "Apple license service returned an invalid response. Please try again later.",
       "paidNotSupported": "Purchasing paid apps is not supported",
       "unavailable": "Item is temporarily unavailable",
       "passwordExpired": "Password token is expired",
