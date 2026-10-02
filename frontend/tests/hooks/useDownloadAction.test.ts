@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { PurchaseError, type PurchaseResult } from "../../src/apple/purchase";
-import { purchaseWithTokenRefresh } from "../../src/hooks/useDownloadAction";
+import { VersionHistoryError } from "../../src/apple/versionFinder";
+import {
+  listVersionsWithLicense,
+  purchaseWithTokenRefresh,
+} from "../../src/hooks/useDownloadAction";
 import type { Account, Software } from "../../src/types";
 
 vi.mock("../../src/apple/request", () => ({ appleRequest: vi.fn() }));
@@ -98,5 +102,50 @@ describe("purchaseWithTokenRefresh", () => {
 
     expect(renew).not.toHaveBeenCalled();
     expect(updateAccount).not.toHaveBeenCalled();
+  });
+});
+
+describe("listVersionsWithLicense", () => {
+  it("acquires a free app license and retries version history once", async () => {
+    const licenseRequired = new VersionHistoryError("license required", "9610");
+    const list = vi
+      .fn()
+      .mockRejectedValueOnce(licenseRequired)
+      .mockResolvedValueOnce({ versions: ["123"], updatedCookies: purchased.updatedCookies });
+    const acquireLicense = vi.fn().mockResolvedValue(purchased);
+
+    await expect(
+      listVersionsWithLicense(account, app, acquireLicense, list),
+    ).resolves.toMatchObject({ versions: ["123"] });
+
+    expect(acquireLicense).toHaveBeenCalledOnce();
+    expect(list).toHaveBeenNthCalledWith(2, {
+      ...account,
+      cookies: purchased.updatedCookies,
+    }, app);
+  });
+
+  it("does not acquire a license for unrelated errors", async () => {
+    const error = new Error("network failed");
+    const list = vi.fn().mockRejectedValue(error);
+    const acquireLicense = vi.fn();
+
+    await expect(
+      listVersionsWithLicense(account, app, acquireLicense, list),
+    ).rejects.toBe(error);
+    expect(acquireLicense).not.toHaveBeenCalled();
+    expect(list).toHaveBeenCalledOnce();
+  });
+
+  it("does not attempt automatic purchase for paid apps", async () => {
+    const paidApp = { ...app, price: 1 };
+    const error = new VersionHistoryError("license required", "9610");
+    const list = vi.fn().mockRejectedValue(error);
+    const acquireLicense = vi.fn();
+
+    await expect(
+      listVersionsWithLicense(account, paidApp, acquireLicense, list),
+    ).rejects.toBe(error);
+    expect(acquireLicense).not.toHaveBeenCalled();
   });
 });

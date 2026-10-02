@@ -8,7 +8,6 @@ import { useAccounts } from "../../hooks/useAccounts";
 import { useDownloadAction } from "../../hooks/useDownloadAction";
 import { useToastStore } from "../../store/toast";
 import { lookupLatestAppVersion } from '../../api/search';
-import { listVersions } from "../../apple/versionFinder";
 import { storeIdToCountry } from "../../apple/config";
 import { resolveVersionMetadata } from "../../apple/versionMetadataResolver";
 import { getErrorMessage } from "../../utils/error";
@@ -20,7 +19,8 @@ export default function VersionHistory() {
   const { accounts, updateAccount } = useAccounts();
   const { t } = useTranslation();
   const addToast = useToastStore((s) => s.addToast);
-  const { startDownload, toastDownloadError } = useDownloadAction();
+  const { startDownload, loadVersions, toastDownloadError } =
+    useDownloadAction();
 
   const stateApp = (location.state as { app?: Software; country?: string })
     ?.app;
@@ -61,7 +61,7 @@ export default function VersionHistory() {
     setLoading(true);
     try {
       const [result, latest] = await Promise.all([
-        listVersions(account, app),
+        loadVersions(account, app),
         lookupLatestAppVersion(app.id, country).catch(() => null),
       ]);
       setVersions(result.versions);

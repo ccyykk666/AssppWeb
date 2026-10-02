@@ -10,6 +10,17 @@ import {
   volumeStoreEndpoint,
 } from './config';
 import type { Account, Software } from '../types';
+import i18n from '../i18n';
+
+export class VersionHistoryError extends Error {
+  constructor(
+    message: string,
+    public readonly code?: string,
+  ) {
+    super(message);
+    this.name = 'VersionHistoryError';
+  }
+}
 
 export async function listVersions(
   account: Account,
@@ -122,9 +133,15 @@ export async function listVersions(
       switch (failureType) {
         case '2034':
         case '2042':
-          throw new Error('Password token is expired');
+          throw new VersionHistoryError(
+            i18n.t('errors.download.passwordExpired'),
+            failureType,
+          );
         case '9610':
-          throw new Error('License required - purchase the app first');
+          throw new VersionHistoryError(
+            i18n.t('errors.download.licenseRequired'),
+            failureType,
+          );
         default: {
           const message = dict.customerMessage as string | undefined;
           throw new Error(message ?? `Apple error ${failureType}`);

@@ -9,7 +9,6 @@ import { useDownloadAction } from "../../hooks/useDownloadAction";
 import { useSettingsStore } from "../../store/settings";
 import { useToastStore } from "../../store/toast";
 import { lookupApp, lookupLatestAppVersion } from "../../api/search";
-import { listVersions } from "../../apple/versionFinder";
 import { countryCodeMap, storeIdToCountry } from "../../apple/config";
 import { firstAccountCountry } from "../../utils/account";
 import { getErrorMessage } from "../../utils/error";
@@ -23,6 +22,7 @@ export default function AddDownload() {
   const {
     startDownload,
     acquireLicense,
+    loadVersions,
     toastDownloadError,
     toastLicenseError,
   } = useDownloadAction();
@@ -119,7 +119,7 @@ export default function AddDownload() {
     if (!account || !app) return;
     setLoadingAction("versions");
     try {
-      const result = await listVersions(account, app);
+      const result = await loadVersions(account, app);
       setVersions(result.versions);
       await updateAccount({ ...account, cookies: result.updatedCookies });
       setStep("versions");

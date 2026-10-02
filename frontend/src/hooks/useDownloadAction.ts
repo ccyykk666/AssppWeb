@@ -4,6 +4,7 @@ import { useAccounts } from "./useAccounts";
 import { useToastStore } from "../store/toast";
 import { useDownloadsStore } from "../store/downloads";
 import { getDownloadInfo } from "../apple/download";
+import { listVersions, VersionHistoryError } from "../apple/versionFinder";
 import {
   purchaseApp,
   PurchaseError,
@@ -26,6 +27,11 @@ interface LicenseDependencies {
 }
 
 type UpdateAccount = (account: Account) => Promise<void>;
+type AcquireLicense = (
+  account: Account,
+  app: Software,
+) => Promise<PurchaseResult>;
+type ListVersions = typeof listVersions;
 
 const EXPIRED_PASSWORD_TOKEN_CODES = new Set(["2034", "2042"]);
 const defaultLicenseDependencies: LicenseDependencies = {
@@ -84,6 +90,28 @@ export async function purchaseWithTokenRefresh(
     cookies: result.updatedCookies,
   });
   return result;
+}
+
+export async function listVersionsWithLicense(
+  account: Account,
+  app: Software,
+  acquireLicense: AcquireLicense,
+  list: ListVersions = listVersions,
+) {
+  try {
+    return await list(account, app);
+  } catch (error) {
+    if (
+      !(error instanceof VersionHistoryError) ||
+      error.code !== '9610' ||
+      (app.price ?? 0) > 0
+    ) {
+      throw error;
+    }
+
+    const license = await acquireLicense(account, app);
+    return list({ ...account, cookies: license.updatedCookies }, app);
+  }
 }
 
 /**
@@ -183,7 +211,7 @@ export function useDownloadAction() {
         'info',
         t('toast.title.licenseAlreadyOwned'),
       );
-      return;
+      return result;
     }
 
     addToast(
@@ -191,6 +219,11 @@ export function useDownloadAction() {
       "success",
       t("toast.title.licenseSuccess"),
     );
+    return result;
+  }
+
+  async function loadVersions(account: Account, app: Software) {
+    return listVersionsWithLicense(account, app, acquireLicense);
   }
 
   function toastDownloadError(account: Account, app: Software, error: unknown) {
@@ -222,6 +255,7 @@ export function useDownloadAction() {
   return {
     startDownload,
     acquireLicense,
+    loadVersions,
     toastDownloadError,
     toastLicenseError,
   };

@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { listVersions } from '../../src/apple/versionFinder';
+import {
+  listVersions,
+  VersionHistoryError,
+} from '../../src/apple/versionFinder';
 import { buildPlist, parsePlist } from '../../src/apple/plist';
 import { appleRequest } from '../../src/apple/request';
 import { fetchBag } from '../../src/apple/bag';
@@ -87,9 +90,10 @@ describe('version history endpoint fallback', () => {
 
   it('keeps explicit account errors without retrying', async () => {
     vi.mocked(appleRequest).mockResolvedValue(response({ failureType: '9610' }));
-    await expect(listVersions(account, app)).rejects.toThrow(
-      'License required - purchase the app first',
-    );
+    await expect(listVersions(account, app)).rejects.toMatchObject({
+      name: 'VersionHistoryError',
+      code: '9610',
+    } satisfies Partial<VersionHistoryError>);
     expect(appleRequest).toHaveBeenCalledTimes(1);
   });
 

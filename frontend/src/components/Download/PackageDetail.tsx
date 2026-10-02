@@ -16,7 +16,6 @@ import { getInstallInfo } from "../../api/install";
 import { authHeaders } from "../../api/client";
 import { lookupApp } from "../../api/search";
 import { storeIdToCountry } from "../../apple/config";
-import { listVersions } from "../../apple/versionFinder";
 import { getAccountContext } from "../../utils/toast";
 import { isNewerVersion } from "../../utils/version";
 import type { Software } from "../../types";
@@ -41,7 +40,7 @@ export default function PackageDetail() {
   const { t } = useTranslation();
   const addToast = useToastStore((s) => s.addToast);
   const { accounts } = useAccounts();
-  const { startDownload } = useDownloadAction();
+  const { startDownload, loadVersions } = useDownloadAction();
 
   const [checkingUpdate, setCheckingUpdate] = useState(false);
   const [taskAction, setTaskAction] = useState<
@@ -151,7 +150,7 @@ export default function PackageDetail() {
 
       if (app && isNewerVersion(app.version, task.software.version)) {
         setLatestApp(app);
-        const result = await listVersions(account, app);
+        const result = await loadVersions(account, app);
         setAvailableVersions(result.versions);
         setSelectedVersion(result.versions[0] || "");
         setShowUpdateModal(true);
