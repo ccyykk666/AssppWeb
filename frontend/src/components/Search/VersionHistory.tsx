@@ -17,7 +17,7 @@ export default function VersionHistory() {
   const { appId } = useParams<{ appId: string }>();
   const location = useLocation();
   const { accounts, updateAccount } = useAccounts();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const addToast = useToastStore((s) => s.addToast);
   const { startDownload, loadVersions, toastDownloadError } =
     useDownloadAction();
@@ -199,11 +199,11 @@ export default function VersionHistory() {
                 >
                   <div>
                     <p className="text-sm font-medium text-gray-900 dark:text-white">
-                      {meta ? `v${meta.displayVersion}` : `ID: ${versionId}`}
+                      {meta ? `v${meta.displayVersion}` : t('search.versions.buildId', { id: versionId })}
                     </p>
                     {meta && (
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {new Date(meta.releaseDate).toLocaleDateString()}
+                        {new Date(meta.releaseDate).toLocaleDateString(i18n.resolvedLanguage)}
                       </p>
                     )}
                     {!meta && !isLoadingMeta && !metaError && (

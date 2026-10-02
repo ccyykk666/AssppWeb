@@ -80,7 +80,7 @@ export default function AccountDetail() {
     } catch (err) {
       if (err instanceof AuthenticationError && err.codeRequired) {
         setNeedsCode(true);
-        addToast(err.message, "error");
+        addToast(getErrorMessage(err, t('accounts.detail.reauthFailed')), "error");
       } else {
         addToast(
           getErrorMessage(err, t("accounts.detail.reauthFailed")),

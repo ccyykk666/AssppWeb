@@ -5,6 +5,7 @@ import Badge from "../common/Badge";
 import ProgressBar from "../common/ProgressBar";
 import Spinner from "../common/Spinner";
 import { getInstallInfo } from "../../api/install";
+import { getErrorMessage } from '../../utils/error';
 import type { DownloadTask } from "../../types";
 
 interface DownloadItemProps {
@@ -71,7 +72,7 @@ export default function DownloadItem({
 
           {task.error && (
             <p className="mt-2 text-xs text-red-600 dark:text-red-400 font-medium bg-red-50 dark:bg-red-900/20 p-2 rounded-md border border-red-100 dark:border-red-900/30">
-              {task.error}
+              {getErrorMessage(task.error, t('errors.messages.unknown'))}
             </p>
           )}
 

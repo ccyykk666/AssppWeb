@@ -1,5 +1,6 @@
-import type { ReactNode } from "react";
+import { useTranslation } from 'react-i18next';
 import { useToastStore, type ToastType } from "../../store/toast";
+import type { ReactNode } from "react";
 
 const iconBg: Record<ToastType, string> = {
   success: "bg-green-50 dark:bg-green-900/20",
@@ -62,6 +63,7 @@ const icons: Record<ToastType, ReactNode> = {
 };
 
 export default function ToastContainer() {
+  const { t } = useTranslation();
   const { toasts, removeToast } = useToastStore();
 
   return (
@@ -81,7 +83,7 @@ export default function ToastContainer() {
       <div
         className="fixed top-[calc(env(safe-area-inset-top)+4rem)] md:top-4 right-4 z-[100] flex flex-col gap-3 pointer-events-none"
         role="region"
-        aria-label="Notifications"
+        aria-label={t('common.notifications')}
       >
         {toasts.map((toast) => (
           <div
@@ -116,7 +118,7 @@ export default function ToastContainer() {
               <button
                 onClick={() => removeToast(toast.id)}
                 className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors flex-shrink-0"
-                aria-label="Close notification"
+                aria-label={t('common.closeNotification')}
               >
                 <svg
                   className="w-4 h-4"

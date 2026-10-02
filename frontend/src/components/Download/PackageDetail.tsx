@@ -15,9 +15,10 @@ import { useToastStore } from "../../store/toast";
 import { getInstallInfo } from "../../api/install";
 import { authHeaders } from "../../api/client";
 import { lookupApp } from "../../api/search";
-import { storeIdToCountry } from "../../apple/config";
 import { getAccountContext } from "../../utils/toast";
+import { getErrorMessage } from '../../utils/error';
 import { isNewerVersion } from "../../utils/version";
+import { storeIdToCountry } from "../../apple/config";
 import type { Software } from "../../types";
 
 function formatBytes(bytes: number): string {
@@ -37,7 +38,7 @@ export default function PackageDetail() {
   const navigate = useNavigate();
   const { tasks, deleteDownload, pauseDownload, resumeDownload, hashToEmail } =
     useDownloads();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const addToast = useToastStore((s) => s.addToast);
   const { accounts } = useAccounts();
   const { startDownload, loadVersions } = useDownloadAction();
@@ -308,7 +309,9 @@ export default function PackageDetail() {
         )}
 
         {task.error && (
-          <p className="text-sm text-red-500 dark:text-red-400">{task.error}</p>
+          <p className="text-sm text-red-500 dark:text-red-400">
+            {getErrorMessage(task.error, t('errors.messages.unknown'))}
+          </p>
         )}
 
         <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
@@ -342,7 +345,7 @@ export default function PackageDetail() {
                 {t("downloads.package.created")}
               </dt>
               <dd className="text-gray-900 dark:text-gray-200">
-                {new Date(task.createdAt).toLocaleString()}
+                {new Date(task.createdAt).toLocaleString(i18n.resolvedLanguage)}
               </dd>
             </div>
           </dl>

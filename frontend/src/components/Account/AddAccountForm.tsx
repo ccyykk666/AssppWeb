@@ -43,7 +43,7 @@ export default function AddAccountForm() {
     } catch (err) {
       if (err instanceof AuthenticationError && err.codeRequired) {
         setNeedsCode(true);
-        addToast(err.message, "error");
+        addToast(getErrorMessage(err, t('accounts.addForm.authFailed')), "error");
       } else {
         addToast(
           getErrorMessage(err, t("accounts.addForm.authFailed")),

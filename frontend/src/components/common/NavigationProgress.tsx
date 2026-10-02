@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from 'react-i18next';
 import { useNavigationStore } from "../../store/navigation";
 
 export default function NavigationProgress() {
+  const { t } = useTranslation();
   const pending = useNavigationStore((state) => state.pending);
   const start = useNavigationStore((state) => state.start);
   const [visible, setVisible] = useState(false);
@@ -91,7 +93,7 @@ export default function NavigationProgress() {
           completing ? "opacity-0 delay-100" : "opacity-100"
         }`}
         role="progressbar"
-        aria-label="Loading"
+        aria-label={t('loading')}
       >
         <div
           className={`relative h-full origin-left bg-gradient-to-r from-gray-500 via-gray-300 to-white shadow-[0_0_8px_rgba(107,114,128,0.5)] ${

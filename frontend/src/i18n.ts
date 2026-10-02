@@ -3,10 +3,10 @@ import { initReactI18next } from "react-i18next";
 import LanguageDetector from "i18next-browser-languagedetector";
 import enUSTranslation from "./locales/en-US.json";
 import zhCNTranslation from "./locales/zh-CN.json";
-import zhTWTranslation from "./locales/zh-TW.json";
-import jaTranslation from "./locales/ja.json";
-import koTranslation from "./locales/ko.json";
-import ruTranslation from "./locales/ru.json";
+
+export function normalizeLanguage(language: string): 'zh-CN' | 'en-US' {
+  return /^zh(?:-|$)/i.test(language) ? 'zh-CN' : 'en-US';
+}
 
 const resources = {
   "en-US": {
@@ -15,18 +15,6 @@ const resources = {
   "zh-CN": {
     translation: zhCNTranslation,
   },
-  "zh-TW": {
-    translation: zhTWTranslation,
-  },
-  ja: {
-    translation: jaTranslation,
-  },
-  ko: {
-    translation: koTranslation,
-  },
-  ru: {
-    translation: ruTranslation,
-  },
 };
 
 i18n
@@ -34,10 +22,21 @@ i18n
   .use(initReactI18next)
   .init({
     resources,
+    supportedLngs: ['zh-CN', 'en-US'],
     fallbackLng: "en-US",
+    detection: {
+      convertDetectedLanguage: normalizeLanguage,
+    },
     interpolation: {
       escapeValue: false,
     },
   });
+
+function updateDocumentLanguage(language: string) {
+  document.documentElement.lang = normalizeLanguage(language);
+}
+
+i18n.on('languageChanged', updateDocumentLanguage);
+updateDocumentLanguage(i18n.resolvedLanguage ?? i18n.language ?? 'en-US');
 
 export default i18n;

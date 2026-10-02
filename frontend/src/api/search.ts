@@ -74,11 +74,7 @@ export async function lookupLatestAppVersion(
 
 const appleLanguageMap: Record<string, string> = {
   'zh-CN': 'zh-Hans-CN',
-  'zh-TW': 'zh-Hant-TW',
   'en-US': 'en-US',
-  ja: 'ja-JP',
-  ko: 'ko-KR',
-  ru: 'ru-RU',
 };
 
 export async function getReleaseHistory(

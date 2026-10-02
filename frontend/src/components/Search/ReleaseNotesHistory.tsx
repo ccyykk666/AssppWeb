@@ -115,7 +115,7 @@ export default function ReleaseNotesHistory() {
                       dateTime={entry.releaseDate}
                       className="text-xs text-gray-500 dark:text-gray-400"
                     >
-                      {new Date(entry.releaseDate).toLocaleDateString()}
+                      {new Date(entry.releaseDate).toLocaleDateString(i18n.resolvedLanguage)}
                     </time>
                   )}
                 </div>

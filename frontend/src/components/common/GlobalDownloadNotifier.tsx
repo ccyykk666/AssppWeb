@@ -4,6 +4,7 @@ import { useDownloads } from "../../hooks/useDownloads";
 import { useAccounts } from "../../hooks/useAccounts";
 import { useToastStore } from "../../store/toast";
 import { getAccountContext } from "../../utils/toast";
+import { getErrorMessage } from '../../utils/error';
 import type { DownloadTask } from "../../types";
 
 /**
@@ -63,7 +64,7 @@ export default function GlobalDownloadNotifier() {
           t("toast.msgFailed", {
             appName,
             ...ctx,
-            error: task.error || "Unknown error",
+            error: getErrorMessage(task.error, t('errors.messages.unknown')),
           }),
           "error",
           t("toast.title.downloadFailed"),

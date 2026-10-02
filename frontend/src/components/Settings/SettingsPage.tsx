@@ -200,10 +200,6 @@ export default function SettingsPage() {
               >
                 <option value="en-US">English (US)</option>
                 <option value="zh-CN">简体中文</option>
-                <option value="zh-TW">繁體中文</option>
-                <option value="ja">日本語</option>
-                <option value="ko">한국어</option>
-                <option value="ru">Русский</option>
               </select>
             </div>
           </div>
@@ -276,7 +272,7 @@ export default function SettingsPage() {
                       {t("settings.server.uptime")}
                     </dt>
                     <dd className="text-sm text-gray-900 dark:text-gray-200">
-                      {formatUptime(serverInfo.uptime)}
+                      {formatUptime(serverInfo.uptime, t)}
                     </dd>
                   </div>
                 )}
@@ -289,7 +285,7 @@ export default function SettingsPage() {
                 <dl className="space-y-3">
                   <div>
                     <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                      PORT
+                      {t('settings.server.port')}
                     </dt>
                     <dd className="text-sm text-gray-900 dark:text-gray-200 font-mono">
                       {serverInfo.port}
@@ -297,7 +293,7 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                      DATA_DIR
+                      {t('settings.server.dataDirectory')}
                     </dt>
                     <dd className="text-sm text-gray-900 dark:text-gray-200 font-mono">
                       {serverInfo.dataDir}
@@ -305,7 +301,7 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                      PUBLIC_BASE_URL
+                      {t('settings.server.publicUrl')}
                     </dt>
                     <dd className="text-sm text-gray-900 dark:text-gray-200 font-mono">
                       {serverInfo.publicBaseUrl || (
@@ -317,7 +313,7 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 break-all sm:break-normal">
-                      UNSAFE_DANGEROUSLY_DISABLE_HTTPS_REDIRECT
+                      {t('settings.server.disableHttpsRedirect')}
                     </dt>
                     <dd className="text-sm text-gray-900 dark:text-gray-200 font-mono">
                       {serverInfo.disableHttpsRedirect
@@ -327,7 +323,7 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                      AUTO_CLEANUP_DAYS
+                      {t('settings.server.cleanupDays')}
                     </dt>
                     <dd className="text-sm text-gray-900 dark:text-gray-200 font-mono">
                       {serverInfo.autoCleanupDays ||
@@ -336,7 +332,7 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                      AUTO_CLEANUP_MAX_MB
+                      {t('settings.server.cleanupSize')}
                     </dt>
                     <dd className="text-sm text-gray-900 dark:text-gray-200 font-mono">
                       {serverInfo.autoCleanupMaxMB ||
@@ -345,7 +341,7 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                      MAX_DOWNLOAD_MB
+                      {t('settings.server.maxDownloadSize')}
                     </dt>
                     <dd className="text-sm text-gray-900 dark:text-gray-200 font-mono">
                       {serverInfo.maxDownloadMB ||
@@ -354,7 +350,7 @@ export default function SettingsPage() {
                   </div>
                   <div>
                     <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                      DOWNLOAD_THREADS
+                      {t('settings.server.downloadThreads')}
                     </dt>
                     <dd className="text-sm text-gray-900 dark:text-gray-200 font-mono">
                       {serverInfo.downloadThreads ?? 8}
@@ -443,7 +439,7 @@ export default function SettingsPage() {
                     {t("settings.about.buildDate")}
                   </dt>
                   <dd className="text-xs text-gray-500 dark:text-gray-400">
-                    {new Date(serverInfo.buildDate).toLocaleString()}
+                    {new Date(serverInfo.buildDate).toLocaleString(i18n.resolvedLanguage)}
                   </dd>
                 </div>
               )}
@@ -569,13 +565,13 @@ export default function SettingsPage() {
   );
 }
 
-function formatUptime(seconds: number): string {
+function formatUptime(seconds: number, t: (key: string, options: { count: number }) => string): string {
   const d = Math.floor(seconds / 86400);
   const h = Math.floor((seconds % 86400) / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const parts: string[] = [];
-  if (d > 0) parts.push(`${d}d`);
-  if (h > 0) parts.push(`${h}h`);
-  parts.push(`${m}m`);
+  if (d > 0) parts.push(t('settings.server.days', { count: d }));
+  if (h > 0) parts.push(t('settings.server.hours', { count: h }));
+  parts.push(t('settings.server.minutes', { count: m }));
   return parts.join(" ");
 }

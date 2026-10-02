@@ -1,6 +1,8 @@
 import { create } from "zustand";
-import type { Software } from "../types";
 import { searchApps, lookupApp } from "../api/search";
+import { getErrorMessage } from '../utils/error';
+import i18n from '../i18n';
+import type { Software } from "../types";
 
 interface SearchState {
   term: string;
@@ -32,7 +34,7 @@ export const useSearch = create<SearchState>((set) => ({
       set({ results: apps });
     } catch (e) {
       set({
-        error: e instanceof Error ? e.message : "Search failed",
+        error: getErrorMessage(e, i18n.t('errors.messages.searchFailed')),
         results: [],
       });
     } finally {
@@ -46,7 +48,7 @@ export const useSearch = create<SearchState>((set) => ({
       set({ results: app ? [app] : [] });
     } catch (e) {
       set({
-        error: e instanceof Error ? e.message : "Lookup failed",
+        error: getErrorMessage(e, i18n.t('errors.messages.lookupFailed')),
         results: [],
       });
     } finally {

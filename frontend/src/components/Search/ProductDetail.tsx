@@ -14,7 +14,7 @@ export default function ProductDetail() {
   const { appId } = useParams<{ appId: string }>();
   const location = useLocation();
   const { accounts } = useAccounts();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const {
     startDownload,
     acquireLicense,
@@ -237,7 +237,7 @@ export default function ProductDetail() {
               {t("search.product.released")}
             </dt>
             <dd className="text-gray-900 dark:text-gray-200">
-              {new Date(app.releaseDate).toLocaleDateString()}
+              {new Date(app.releaseDate).toLocaleDateString(i18n.resolvedLanguage)}
             </dd>
           </dl>
         </div>

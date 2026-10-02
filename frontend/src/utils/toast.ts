@@ -17,7 +17,8 @@ export function getAccountContext(
   t: TFunction,
 ): AccountContext {
   if (!account) {
-    return { userName: "Unknown", appleId: "Unknown", country: "Unknown" };
+    const unknown = t('common.unknown');
+    return { userName: unknown, appleId: unknown, country: unknown };
   }
   const userName = `${account.firstName} ${account.lastName}`;
   const appleId = account.email;

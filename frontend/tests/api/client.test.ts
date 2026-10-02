@@ -29,6 +29,24 @@ describe("api/client", () => {
 
       await expect(apiGet("/api/missing")).rejects.toThrow("Not found");
     });
+
+    it('extracts the backend error instead of displaying raw JSON', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: false,
+        text: () => Promise.resolve('{"error":"Download not found"}'),
+      } as Response);
+      await expect(apiGet('/api/missing')).rejects.toThrow('Download not found');
+    });
+
+    it('replaces proxy HTML with its HTTP status for localized display', async () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+        ok: false,
+        status: 502,
+        statusText: 'Bad Gateway',
+        text: () => Promise.resolve('<html><h1>Bad Gateway</h1></html>'),
+      } as Response);
+      await expect(apiGet('/api/test')).rejects.toThrow('HTTP 502: Bad Gateway');
+    });
   });
 
   describe("apiPost", () => {
