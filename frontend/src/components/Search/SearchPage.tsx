@@ -66,7 +66,6 @@ export default function SearchPage() {
           <input
             type="text"
             value={term}
-            disabled={loading}
             onChange={(e) => setSearchParam({ term: e.target.value })}
             placeholder={t("search.placeholder")}
             className="h-11 min-w-0 flex-1 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-base text-gray-900 dark:text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"

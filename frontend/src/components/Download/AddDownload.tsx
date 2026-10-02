@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import PageContainer from "../Layout/PageContainer";
 import AppIcon from "../common/AppIcon";
@@ -7,12 +7,13 @@ import Spinner from "../common/Spinner";
 import ActionButton from '../common/ActionButton';
 import { useAccounts } from "../../hooks/useAccounts";
 import { useDownloadAction } from "../../hooks/useDownloadAction";
+import { useRequestContext } from '../../hooks/useRequestContext';
 import { useSettingsStore } from "../../store/settings";
 import { useToastStore } from "../../store/toast";
 import { lookupApp, lookupLatestAppVersion } from "../../api/search";
-import { countryCodeMap, storeIdToCountry } from "../../apple/config";
 import { firstAccountCountry } from "../../utils/account";
 import { getErrorMessage } from "../../utils/error";
+import { countryCodeMap, storeIdToCountry } from "../../apple/config";
 import type { Software } from "../../types";
 
 export default function AddDownload() {
@@ -34,11 +35,17 @@ export default function AddDownload() {
   const [versions, setVersions] = useState<string[]>([]);
   const [selectedVersion, setSelectedVersion] = useState("");
   const [step, setStep] = useState<"lookup" | "ready" | "versions">("lookup");
-  const [loadingAction, setLoadingAction] = useState<
-    "lookup" | "license" | "versions" | "download" | null
-  >(null);
+  const [lookingUp, setLookingUp] = useState(false);
+  const lookupRunning = useRef(false);
+  const captureLookup = useRequestContext(`${bundleId.trim()}:${country}`);
+  const actionContext = `${app?.id}:${country}:${selectedAccount}`;
+  const captureContext = useRequestContext(actionContext);
 
-  const isLoading = loadingAction !== null;
+  useEffect(() => {
+    setVersions([]);
+    setSelectedVersion('');
+    setStep(app ? 'ready' : 'lookup');
+  }, [actionContext]);
 
   const availableCountryCodes = Array.from(
     new Set(
@@ -84,10 +91,13 @@ export default function AddDownload() {
 
   async function handleLookup(e: React.FormEvent) {
     e.preventDefault();
-    if (!bundleId.trim()) return;
-    setLoadingAction("lookup");
+    if (!bundleId.trim() || lookupRunning.current) return;
+    lookupRunning.current = true;
+    const isCurrent = captureLookup();
+    setLookingUp(true);
     try {
       const result = await lookupApp(bundleId.trim(), country);
+      if (!isCurrent()) return;
       if (!result) {
         addToast(t("downloads.add.notFound"), "error");
         return;
@@ -96,44 +106,32 @@ export default function AddDownload() {
       setStep("ready");
       void lookupLatestAppVersion(result.id, country).catch(() => undefined);
     } catch (e) {
-      addToast(getErrorMessage(e, t("downloads.add.lookupFailed")), "error");
+      if (isCurrent()) addToast(getErrorMessage(e, t("downloads.add.lookupFailed")), "error");
     } finally {
-      setLoadingAction(null);
+      lookupRunning.current = false;
+      setLookingUp(false);
     }
   }
 
   async function handleGetLicense() {
     if (!account || !app) return;
-    setLoadingAction("license");
-    try {
-      const result = await acquireLicense(account, app);
-      return result.status === 'alreadyOwned' ? t('common.licenseOwned') : t('common.licenseAcquired');
-    } finally {
-      setLoadingAction(null);
-    }
+    const result = await acquireLicense(account, app);
+    return result.status === 'alreadyOwned' ? t('common.licenseOwned') : t('common.licenseAcquired');
   }
 
   async function handleLoadVersions() {
     if (!account || !app) return;
-    setLoadingAction("versions");
-    try {
-      const result = await loadVersions(account, app);
-      setVersions(result.versions);
-      await updateAccount({ ...account, cookies: result.updatedCookies });
-      setStep("versions");
-    } finally {
-      setLoadingAction(null);
-    }
+    const isCurrent = captureContext();
+    const result = await loadVersions(account, app);
+    await updateAccount({ ...account, cookies: result.updatedCookies });
+    if (!isCurrent()) return;
+    setVersions(result.versions);
+    setStep('versions');
   }
 
   async function handleDownload() {
     if (!account || !app) return;
-    setLoadingAction("download");
-    try {
-      await startDownload(account, app, selectedVersion || undefined);
-    } finally {
-      setLoadingAction(null);
-    }
+    await startDownload(account, app, selectedVersion || undefined);
   }
 
   return (
@@ -151,15 +149,14 @@ export default function AddDownload() {
                 onChange={(e) => setBundleId(e.target.value)}
                 placeholder={t("downloads.add.placeholder")}
                 className="block w-full flex-1 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-base text-gray-900 dark:text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-50 dark:disabled:bg-gray-800/50 disabled:text-gray-500 dark:disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
-                disabled={isLoading}
               />
               <button
                 type="submit"
-                disabled={isLoading || !bundleId.trim()}
+                disabled={lookingUp || !bundleId.trim()}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
               >
-                {loadingAction === "lookup" && <Spinner />}
-                {loadingAction === "lookup"
+                {lookingUp && <Spinner />}
+                {lookingUp
                   ? t("downloads.add.lookingUp")
                   : t("downloads.add.lookup")}
               </button>
@@ -171,17 +168,17 @@ export default function AddDownload() {
               onChange={(v) => {
                 setCountry(v);
                 setCountryTouched(true);
+                setApp(null);
               }}
               availableCountryCodes={availableCountryCodes}
               allCountryCodes={allCountryCodes}
-              disabled={isLoading}
               className="w-1/2 truncate disabled:bg-gray-50 dark:disabled:bg-gray-800/50 disabled:text-gray-500 dark:disabled:text-gray-400 disabled:cursor-not-allowed"
             />
             <select
               value={selectedAccount}
               onChange={(e) => setSelectedAccount(e.target.value)}
               className="w-1/2 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-base text-gray-900 dark:text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 truncate disabled:bg-gray-50 dark:disabled:bg-gray-800/50 disabled:text-gray-500 dark:disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
-              disabled={isLoading || filteredAccounts.length === 0}
+              disabled={filteredAccounts.length === 0}
             >
               {filteredAccounts.length > 0 ? (
                 filteredAccounts.map((a) => (
@@ -198,7 +195,7 @@ export default function AddDownload() {
           </div>
         </form>
 
-        {!app && !isLoading && (
+        {!app && !lookingUp && (
           <div className="flex flex-col items-center justify-center py-12 px-4 bg-gray-50 dark:bg-gray-900/30 border-2 border-dashed border-gray-200 dark:border-gray-800 rounded-2xl">
             <div className="bg-white dark:bg-gray-800 p-4 rounded-full shadow-sm mb-4 border border-gray-100 dark:border-gray-700">
               <svg
@@ -249,7 +246,6 @@ export default function AddDownload() {
                 </label>
                 <select
                   value={selectedVersion}
-                  disabled={isLoading}
                   onChange={(e) => setSelectedVersion(e.target.value)}
                   className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-base text-gray-900 dark:text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 truncate disabled:bg-gray-50 dark:disabled:bg-gray-800/50 disabled:text-gray-500 dark:disabled:text-gray-400 disabled:cursor-not-allowed transition-colors"
                 >
@@ -271,8 +267,8 @@ export default function AddDownload() {
                   pendingLabel={t('downloads.add.processing')}
                   successLabel={t('common.licenseAcquired')}
                   errorLabel={t('toast.title.licenseFailed')}
-                  contextKey={`${app.id}:${selectedAccount}`}
-                  disabled={isLoading || !account}
+                  contextKey={actionContext}
+                  disabled={!account}
                   className="inline-flex items-center gap-2 px-3 py-1.5 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 />
               )}
@@ -283,8 +279,8 @@ export default function AddDownload() {
                   pendingLabel={t('downloads.add.processing')}
                   successLabel={t('common.versionsLoaded')}
                   errorLabel={t('downloads.add.versionsFailed')}
-                  contextKey={`${app.id}:${selectedAccount}`}
-                  disabled={isLoading || !account}
+                  contextKey={actionContext}
+                  disabled={!account}
                   className="inline-flex items-center gap-2 px-3 py-1.5 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-md border border-gray-300 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 />
               )}
@@ -294,8 +290,8 @@ export default function AddDownload() {
                 pendingLabel={t('downloads.add.processing')}
                 successLabel={t('common.downloadQueued')}
                 errorLabel={t('toast.title.downloadFailed')}
-                contextKey={`${app.id}:${selectedAccount}:${selectedVersion}`}
-                disabled={isLoading || !account}
+                contextKey={`${actionContext}:${selectedVersion}`}
+                disabled={!account}
                 className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               />
             </div>

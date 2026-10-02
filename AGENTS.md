@@ -172,7 +172,7 @@ The backend proxies the bag endpoint via `GET /api/bag?guid=<deviceId>` using No
 - **Alert** — `<Alert type="error|success|warning">` for status messages (replaces inline alert divs)
 - **Modal** — `<Modal open={bool} onClose={fn} title={string}>` for dialog overlays
 - **Spinner** — inline SVG loading spinner for buttons
-- **ActionButton** — async button with fixed-size local loading/success animations; failures use the existing error notification bar, never expand the button row. Search inputs and buttons share a 44px height; region/device selectors remain enabled during search, and result links retain the requested storefront.
+- **ActionButton** — async button with fixed-size local loading/success animations; failures use the existing error notification bar, never expand the button row. Only the action itself blocks duplicate submissions; unrelated actions, inputs and account/region/device selectors remain enabled. Context changes suppress stale feedback and version results (`useRequestContext`); switching away and back must not repeat an in-flight action. Search inputs and buttons share a 44px height, and result links retain the requested storefront.
 - **CountrySelect** — optgroup-based country dropdown with "Available Regions" + "All Regions"
 - **AppIcon** — 3 sizes (40/56/80px), rounded corners, letter fallback
 - **Badge** — color-coded status pill
@@ -242,6 +242,7 @@ The settings endpoint (`/api/settings`) must never reflect request headers (`x-f
 ```bash
 cd backend && npx vitest run    # Node environment
 cd frontend && npx vitest run   # jsdom environment with fake-indexeddb
+cd frontend && npm run typecheck # Full TypeScript check, also required by build
 ```
 
 ### E2E Tests (Playwright)

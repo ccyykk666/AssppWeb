@@ -89,10 +89,11 @@ export default function PackageDetail() {
   }
 
   async function handleDelete() {
+    if (!task) return;
     if (!confirm(t("downloads.package.deleteConfirm"))) return;
     setTaskAction("delete");
     try {
-      await deleteDownload(task!.id);
+      await deleteDownload(task.id);
       toastAction("toast.title.deleteSuccess", "success");
       navigate("/downloads");
     } finally {
@@ -188,6 +189,7 @@ export default function PackageDetail() {
   }
 
   async function handleTaskAction(action: "pause" | "resume") {
+    if (!task) return;
     setTaskAction(action);
     try {
       if (action === "pause") await pauseDownload(task.id);
@@ -204,6 +206,7 @@ export default function PackageDetail() {
   }
 
   async function handleDownloadIpa() {
+    if (!task) return;
     const controller = new AbortController();
     ipaDownloadAbortRef.current = controller;
     setIpaDownload({ active: true, loaded: 0, total: 0 });

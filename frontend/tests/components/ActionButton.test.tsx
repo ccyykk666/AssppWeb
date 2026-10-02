@@ -76,4 +76,24 @@ describe('local action feedback', () => {
     unmount();
     expect(vi.getTimerCount()).toBe(0);
   });
+
+  it('allows another account but prevents resubmission after switching back', async () => {
+    const first = deferred<string>();
+    const second = deferred<string>();
+    const action = vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const { rerender } = render(<ActionButton {...props} action={action} />);
+    fireEvent.click(screen.getByRole('button'));
+    rerender(<ActionButton {...props} contextKey="other" action={action} />);
+    expect(screen.getByRole('button')).toBeEnabled();
+    fireEvent.click(screen.getByRole('button'));
+    rerender(<ActionButton {...props} action={action} />);
+    expect(screen.getByRole('button')).toBeDisabled();
+    fireEvent.click(screen.getByRole('button'));
+    expect(action).toHaveBeenCalledTimes(2);
+    await act(async () => first.resolve('旧账号结果'));
+    expect(screen.getByRole('button')).toBeEnabled();
+    expect(screen.getByRole('status')).toBeEmptyDOMElement();
+    await act(async () => second.resolve('其他账号结果'));
+    expect(screen.getByRole('button')).toHaveAttribute('data-feedback', 'idle');
+  });
 });

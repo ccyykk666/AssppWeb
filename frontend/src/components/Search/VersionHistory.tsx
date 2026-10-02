@@ -7,10 +7,11 @@ import Spinner from "../common/Spinner";
 import ActionButton from '../common/ActionButton';
 import { useAccounts } from "../../hooks/useAccounts";
 import { useDownloadAction } from "../../hooks/useDownloadAction";
+import { useRequestContext } from '../../hooks/useRequestContext';
 import { lookupLatestAppVersion } from '../../api/search';
-import { storeIdToCountry } from "../../apple/config";
 import { resolveVersionMetadata } from "../../apple/versionMetadataResolver";
 import { getErrorMessage } from "../../utils/error";
+import { storeIdToCountry } from "../../apple/config";
 import type { Software, VersionMetadata } from "../../types";
 
 export default function VersionHistory() {
@@ -37,12 +38,16 @@ export default function VersionHistory() {
   const [versionMeta, setVersionMeta] = useState<
     Record<string, VersionMetadata>
   >({});
-  const [loading, setLoading] = useState(false);
   const [loadingMeta, setLoadingMeta] = useState<Record<string, boolean>>({});
   const [metaErrors, setMetaErrors] = useState<Record<string, string>>({});
-  const [downloadingVersion, setDownloadingVersion] = useState<string | null>(
-    null,
-  );
+  const captureContext = useRequestContext(`${app?.id}:${country}:${selectedAccount}`);
+
+  useEffect(() => {
+    setVersions([]);
+    setVersionMeta({});
+    setLoadingMeta({});
+    setMetaErrors({});
+  }, [app?.id, country, selectedAccount]);
 
   useEffect(() => {
     if (
@@ -57,33 +62,31 @@ export default function VersionHistory() {
 
   async function handleLoadVersions() {
     if (!account || !app) return;
-    setLoading(true);
-    try {
-      const [result, latest] = await Promise.all([
-        loadVersions(account, app),
-        lookupLatestAppVersion(app.id, country).catch(() => null),
-      ]);
-      setVersions(result.versions);
-      if (
-        latest?.bundleID === app.bundleID && latest.version && app.releaseDate &&
-        result.versions.includes(latest.externalVersionId)
-      ) {
-        setVersionMeta((previous) => ({
-          ...previous,
-          [latest.externalVersionId]: {
-            displayVersion: latest.version,
-            releaseDate: app.releaseDate,
-          },
-        }));
-      }
-      await updateAccount({ ...account, cookies: result.updatedCookies });
-    } finally {
-      setLoading(false);
+    const isCurrent = captureContext();
+    const [result, latest] = await Promise.all([
+      loadVersions(account, app),
+      lookupLatestAppVersion(app.id, country).catch(() => null),
+    ]);
+    await updateAccount({ ...account, cookies: result.updatedCookies });
+    if (!isCurrent()) return;
+    setVersions(result.versions);
+    if (
+      latest?.bundleID === app.bundleID && latest.version && app.releaseDate &&
+      result.versions.includes(latest.externalVersionId)
+    ) {
+      setVersionMeta((previous) => ({
+        ...previous,
+        [latest.externalVersionId]: {
+          displayVersion: latest.version,
+          releaseDate: app.releaseDate,
+        },
+      }));
     }
   }
 
   async function handleLoadMeta(versionId: string) {
-    if (!account || !app || versionMeta[versionId]) return;
+    if (!account || !app || versionMeta[versionId] || loadingMeta[versionId]) return;
+    const isCurrent = captureContext();
     setLoadingMeta((prev) => ({ ...prev, [versionId]: true }));
     setMetaErrors((previous) => {
       const next = { ...previous };
@@ -92,9 +95,11 @@ export default function VersionHistory() {
     });
     try {
       const result = await resolveVersionMetadata(account, app, versionId);
-      setVersionMeta((prev) => ({ ...prev, [versionId]: result.metadata }));
       await updateAccount({ ...account, cookies: result.updatedCookies });
+      if (!isCurrent()) return;
+      setVersionMeta((prev) => ({ ...prev, [versionId]: result.metadata }));
     } catch (error) {
+      if (!isCurrent()) return;
       setMetaErrors((previous) => ({
         ...previous,
         [versionId]: getErrorMessage(
@@ -103,18 +108,13 @@ export default function VersionHistory() {
         ),
       }));
     } finally {
-      setLoadingMeta((prev) => ({ ...prev, [versionId]: false }));
+      if (isCurrent()) setLoadingMeta((prev) => ({ ...prev, [versionId]: false }));
     }
   }
 
   async function handleDownloadVersion(versionId: string) {
     if (!account || !app) return;
-    setDownloadingVersion(versionId);
-    try {
-      await startDownload(account, app, versionId);
-    } finally {
-      setDownloadingVersion(null);
-    }
+    await startDownload(account, app, versionId);
   }
 
   if (!app) {
@@ -153,7 +153,6 @@ export default function VersionHistory() {
                 </label>
                 <select
                   value={selectedAccount}
-                  disabled={loading || downloadingVersion !== null}
                   onChange={(e) => setSelectedAccount(e.target.value)}
                   className="rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-base text-gray-900 dark:text-white w-full focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
                 >
@@ -171,7 +170,7 @@ export default function VersionHistory() {
                 successLabel={t('common.versionsLoaded')}
                 errorLabel={t('search.versions.loadFailed')}
                 contextKey={`${app.id}:${selectedAccount}`}
-                disabled={loading || downloadingVersion !== null || !account}
+                disabled={!account}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
               />
             </div>
@@ -234,7 +233,7 @@ export default function VersionHistory() {
                     successLabel={t('common.downloadQueued')}
                     errorLabel={t('toast.title.downloadFailed')}
                     contextKey={`${app.id}:${selectedAccount}:${versionId}`}
-                    disabled={loading || downloadingVersion !== null || !account}
+                    disabled={!account}
                     className="inline-flex items-center gap-2 px-3 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
                   />
                 </div>

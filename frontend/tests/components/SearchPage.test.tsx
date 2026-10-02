@@ -50,13 +50,28 @@ describe('search button local feedback', () => {
     expect(button.querySelector('.action-button-content')).toHaveTextContent('');
     expect(button.querySelector('.action-button-content svg')).not.toBeNull();
     expect(button).toBeDisabled();
-    expect(screen.getByRole('textbox')).toBeDisabled();
+    expect(screen.getByRole('textbox')).toBeEnabled();
     screen.getAllByRole('combobox').forEach((select) => expect(select).toBeEnabled());
     await act(async () => resolve([app]));
     expect(button).toHaveAttribute('data-feedback', 'success');
     expect(button).toHaveAccessibleName('搜索: 已加载');
     expect(screen.getByRole('link', { name: /TikTok/ })).toHaveAttribute('href', '/search/123');
     expect(useToastStore.getState().toasts).toEqual([]);
+  });
+
+  it('allows editing the next query while a search is pending', async () => {
+    let resolve!: (apps: Software[]) => void;
+    vi.mocked(searchApps).mockImplementationOnce(() => new Promise((done) => { resolve = done; }));
+    renderSearch();
+    const input = screen.getByRole('textbox');
+    fireEvent.change(input, { target: { value: 'tiktok' } });
+    fireEvent.click(screen.getByRole('button'));
+    fireEvent.change(input, { target: { value: 'weibo' } });
+    expect(input).toHaveValue('weibo');
+    await act(async () => resolve([app]));
+    expect(input).toHaveValue('weibo');
+    expect(screen.getByRole('button')).toHaveAttribute('data-feedback', 'idle');
+    expect(searchApps).toHaveBeenCalledExactlyOnceWith('tiktok', 'US', 'iPhone');
   });
 
   it('submits once with Enter and keeps feedback when trimming the query', async () => {

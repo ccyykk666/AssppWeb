@@ -25,23 +25,27 @@ export default function ActionButton({
   const [phase, setPhase] = useState<'idle' | 'pending' | 'success'>('idle');
   const [result, setResult] = useState('');
   const generation = useRef(0);
-  const running = useRef(false);
+  const running = useRef(new Set<string | undefined>());
+  const activeContext = useRef<string | undefined>(contextKey);
+  const mounted = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     generation.current++;
-    running.current = false;
+    mounted.current = true;
+    activeContext.current = contextKey;
     clearTimeout(timer.current);
-    setPhase('idle');
+    setPhase(running.current.has(contextKey) ? 'pending' : 'idle');
     return () => {
       generation.current++;
+      mounted.current = false;
       clearTimeout(timer.current);
     };
   }, [contextKey]);
 
   async function handleClick() {
-    if (disabled || pending || running.current) return;
-    running.current = true;
+    if (disabled || pending || running.current.has(contextKey)) return;
+    running.current.add(contextKey);
     clearTimeout(timer.current);
     const current = ++generation.current;
     setPhase('pending');
@@ -56,7 +60,11 @@ export default function ActionButton({
       addToast(getErrorMessage(cause, errorLabel), 'error', errorLabel);
       setPhase('idle');
     } finally {
-      if (current === generation.current) running.current = false;
+      running.current.delete(contextKey);
+      // Returning to an account with an in-flight action must not submit twice.
+      if (current !== generation.current && mounted.current && activeContext.current === contextKey) {
+        setPhase('idle');
+      }
     }
   }
 

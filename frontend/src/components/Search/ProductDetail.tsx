@@ -28,9 +28,6 @@ export default function ProductDetail() {
   const [app, setApp] = useState<Software | null>(stateApp ?? null);
   const [loading, setLoading] = useState(!stateApp);
   const [selectedAccount, setSelectedAccount] = useState("");
-  const [loadingAction, setLoadingAction] = useState<
-    "purchase" | "download" | null
-  >(null);
 
   const filteredAccounts = useMemo(
     () => accounts.filter((a) => storeIdToCountry(a.store) === country),
@@ -89,23 +86,13 @@ export default function ProductDetail() {
 
   async function handlePurchase() {
     if (!account || !app) return;
-    setLoadingAction("purchase");
-    try {
-      const result = await acquireLicense(account, app);
-      return result.status === 'alreadyOwned' ? t('common.licenseOwned') : t('common.licenseAcquired');
-    } finally {
-      setLoadingAction(null);
-    }
+    const result = await acquireLicense(account, app);
+    return result.status === 'alreadyOwned' ? t('common.licenseOwned') : t('common.licenseAcquired');
   }
 
   async function handleDownload() {
     if (!account || !app) return;
-    setLoadingAction("download");
-    try {
-      await startDownload(account, app);
-    } finally {
-      setLoadingAction(null);
-    }
+    await startDownload(account, app);
   }
 
   return (
@@ -151,7 +138,6 @@ export default function ProductDetail() {
                 value={selectedAccount}
                 onChange={(e) => setSelectedAccount(e.target.value)}
                 className="rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-base text-gray-900 dark:text-white w-full focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
-                disabled={loadingAction !== null}
               >
                 {filteredAccounts.map((a) => (
                   <option key={a.email} value={a.email}>
@@ -169,7 +155,7 @@ export default function ProductDetail() {
                   successLabel={t('common.licenseAcquired')}
                   errorLabel={t('toast.title.licenseFailed')}
                   contextKey={`${app.id}:${selectedAccount}`}
-                  disabled={loadingAction !== null || !account}
+                  disabled={!account}
                   className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
                 />
               )}
@@ -180,7 +166,7 @@ export default function ProductDetail() {
                 successLabel={t('common.downloadQueued')}
                 errorLabel={t('toast.title.downloadFailed')}
                 contextKey={`${app.id}:${selectedAccount}`}
-                disabled={loadingAction !== null || !account}
+                disabled={!account}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
               />
               <Link
