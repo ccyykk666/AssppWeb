@@ -48,6 +48,30 @@ describe("SAP signer route", () => {
     expect(signSAPAction).not.toHaveBeenCalled();
   });
 
+  it.each(['not-a-session', '', 123])('rejects malformed signing session %s', async (sessionID) => {
+    const response = await request(app).post('/api/sap/sign').send({
+      guid: 'AABBCCDDEEFF', sessionID,
+      setupURL: 'https://fpinit.itunes.apple.com/v1/signSapSetup/legacy',
+      certificateURL: 'https://s.mzstatic.com/sap/setupCert.plist',
+      version: 200, body: 'PHBsaXN0Lz4=',
+    });
+    expect(response.status).toBe(400);
+    expect(signSAPAction).not.toHaveBeenCalled();
+  });
+
+  it('forwards a valid fresh signing session without persisting its request', async () => {
+    const input = {
+      guid: 'AABBCCDDEEFF', sessionID: '00112233445566778899aabbccddeeff',
+      setupURL: 'https://fpinit.itunes.apple.com/v1/signSapSetup/legacy',
+      certificateURL: 'https://s.mzstatic.com/sap/setupCert.plist',
+      version: 200, body: 'PHBsaXN0Lz4=',
+    };
+    const response = await request(app).post('/api/sap/sign').send(input);
+    expect(response.status).toBe(200);
+    expect(signSAPAction).toHaveBeenCalledWith(input);
+    expect(response.body).toEqual({ signature: 'c2lnbmF0dXJl' });
+  });
+
   it("does not expose signer failure details", async () => {
     signSAPAction.mockRejectedValue(new Error("private detail"));
 

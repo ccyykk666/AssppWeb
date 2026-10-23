@@ -33,6 +33,7 @@ const (
 )
 
 type signRequest struct {
+	SessionID      string `json:"sessionID,omitempty"`
 	GUID           string `json:"guid"`
 	SetupURL       string `json:"setupURL"`
 	CertificateURL string `json:"certificateURL"`
@@ -194,6 +195,12 @@ func closeEntries(entries []*signerEntry) {
 }
 
 func validatedSignInput(input signRequest) (sap.Config, []byte, [32]byte, error) {
+	if input.SessionID != "" {
+		decoded, err := hex.DecodeString(input.SessionID)
+		if err != nil || len(decoded) != 16 {
+			return sap.Config{}, nil, [32]byte{}, errors.New("invalid signing session identifier")
+		}
+	}
 	normalizedGUID, hardwareID, err := parseGUID(input.GUID)
 	if err != nil {
 		return sap.Config{}, nil, [32]byte{}, err
@@ -226,11 +233,12 @@ func validatedSignInput(input signRequest) (sap.Config, []byte, [32]byte, error)
 		HardwareID:     hardwareID,
 	}
 	keyMaterial := fmt.Sprintf(
-		"%s\x00%s\x00%s\x00%d",
+		"%s\x00%s\x00%s\x00%d\x00%s",
 		normalizedGUID,
 		input.SetupURL,
 		input.CertificateURL,
 		input.Version,
+		input.SessionID,
 	)
 	return config, body, sha256.Sum256([]byte(keyMaterial)), nil
 }

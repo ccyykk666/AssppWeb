@@ -123,7 +123,7 @@ export default function AddDownload() {
     if (!account || !app) return;
     const isCurrent = captureContext();
     const result = await loadVersions(account, app);
-    await updateAccount({ ...account, cookies: result.updatedCookies });
+    if (!result.updatedAccount) await updateAccount({ ...account, cookies: result.updatedCookies });
     if (!isCurrent()) return;
     setVersions(result.versions);
     setStep('versions');

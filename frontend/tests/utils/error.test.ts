@@ -22,6 +22,13 @@ describe('localized error messages', () => {
     expect(getErrorMessage(error, 'Failed')).toContain('Error code: 7');
   });
 
+  it('retains the VPS-specific advice for an unusable Apple authentication response', async () => {
+    const english = i18n.t('errors.auth.unusableResponse', { status: 204, lng: 'en-US' });
+    await i18n.changeLanguage('zh-CN');
+    expect(getErrorMessage(english, '失败')).toContain('VPS 出口网络');
+    expect(getErrorMessage(english, '失败')).toContain('HTTP 204');
+  });
+
   it('localizes raw backend JSON and stored task errors at display time', async () => {
     await i18n.changeLanguage('zh-CN');
     expect(getErrorMessage(new Error('{"error":"Download not found"}'), '失败'))

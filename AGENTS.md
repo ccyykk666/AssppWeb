@@ -164,6 +164,8 @@ The backend proxies the bag endpoint via `GET /api/bag?guid=<deviceId>` using No
 - `appleRequest()` in `frontend/src/apple/request.ts` wraps `libcurl.fetch` for all Apple API calls and forces HTTP/1.1 (`_libcurl_http_version: 1.1`)
 - Bag endpoint (`frontend/src/apple/bag.ts`) requires valid Apple authentication and SAP configuration; unsigned fallback authentication is forbidden
 - Authentication (`frontend/src/apple/authenticate.ts`) signs the exact serialized request body before each request and accepts only validated Apple pod redirects
+- Each new sign-in uses a fresh random SAP `sessionID`; bounded retries and the pending 2FA submission reuse that session, endpoint and cookies. The JSON session identifier is optional for compatibility with older clients. It is not a credential. Login XML uses `application/x-apple-plist` and the Swift reference's attempt values (4 for sign-in, 2 for verification). Never retry populated Apple credential errors or retry before a long `Retry-After` deadline.
+- The verified authentication reference is `Lakr233/ApplePackage` commit `9f2ae4fd6eec3b224afb9eea0a80fc822f50b616` (`Commands/Authenticate.swift`, mandatory fresh SAP exchange). Version loading may renew an explicitly expired session once, but a bare HTTP 403 must not trigger endless sign-ins. Preserve renewed tokens when saving subsequent cookies; never restore the captured pre-renewal account snapshot.
 - Plist build/parse (`frontend/src/apple/plist.ts`) uses native XML builder and browser-native `DOMParser`
 - Cookie helper (`frontend/src/apple/cookies.ts`) — `extractAndMergeCookies(rawHeaders, existingCookies)` replaces the repeated extract-and-merge pattern across all Apple protocol files
 

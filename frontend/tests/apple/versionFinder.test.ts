@@ -107,4 +107,15 @@ describe('version history endpoint fallback', () => {
       'different app or version',
     );
   });
+
+  it('retains the typed HTTP 403 without pretending an HTML response is a plist', async () => {
+    vi.mocked(appleRequest).mockResolvedValueOnce({ ...response({}, 403), body: '<html>Forbidden</html>' });
+    await expect(listVersions(account, app)).rejects.toMatchObject({ name: 'VersionHistoryError', code: 'HTTP_403' });
+    expect(appleRequest).toHaveBeenCalledOnce();
+  });
+
+  it('preserves an explicit expired-token verdict even when HTTP status is 403', async () => {
+    vi.mocked(appleRequest).mockResolvedValueOnce(response({ failureType: '2034' }, 403));
+    await expect(listVersions(account, app)).rejects.toMatchObject({ name: 'VersionHistoryError', code: '2034' });
+  });
 });

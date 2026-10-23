@@ -67,7 +67,7 @@ export default function VersionHistory() {
       loadVersions(account, app),
       lookupLatestAppVersion(app.id, country).catch(() => null),
     ]);
-    await updateAccount({ ...account, cookies: result.updatedCookies });
+    if (!result.updatedAccount) await updateAccount({ ...account, cookies: result.updatedCookies });
     if (!isCurrent()) return;
     setVersions(result.versions);
     if (

@@ -7,6 +7,7 @@ const SIGN_TIMEOUT_MS = 10 * 60 * 1000;
 const HEALTH_RETRY_MS = 100;
 
 export interface SAPSignInput {
+  sessionID?: string;
   guid: string;
   setupURL: string;
   certificateURL: string;

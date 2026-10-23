@@ -39,4 +39,14 @@ describe('apple/sapSigner', () => {
       ),
     });
   });
+
+  it('passes the fresh session identifier through to the signer', async () => {
+    await signSAPAction('AABBCCDDEEFF', {
+      setupURL: 'https://fpinit.itunes.apple.com/v1/signSapSetup/legacy',
+      certificateURL: 'https://s.mzstatic.com/sap/setupCert.plist', version: 200,
+    }, '<plist/>', '00112233445566778899aabbccddeeff');
+    expect(apiPost).toHaveBeenCalledWith('/api/sap/sign', expect.objectContaining({
+      sessionID: '00112233445566778899aabbccddeeff', body: btoa('<plist/>'),
+    }));
+  });
 });

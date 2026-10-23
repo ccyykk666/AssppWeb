@@ -4,6 +4,7 @@ WORKDIR /src
 COPY sap-signer/go.mod sap-signer/go.sum ./
 RUN go mod download
 COPY sap-signer/ ./
+RUN go test ./...
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/asspp-sap-signer ./cmd/asspp-sap-signer
 
 # Stage 2: Build frontend

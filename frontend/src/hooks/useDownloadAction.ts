@@ -33,6 +33,11 @@ type AcquireLicense = (
 ) => Promise<PurchaseResult>;
 type ListVersions = typeof listVersions;
 
+interface VersionSessionDependencies {
+  renew: typeof authenticate;
+  updateAccount: UpdateAccount;
+}
+
 const EXPIRED_PASSWORD_TOKEN_CODES = new Set(["2034", "2042"]);
 const defaultLicenseDependencies: LicenseDependencies = {
   purchase: purchaseApp,
@@ -85,11 +90,12 @@ export async function purchaseWithTokenRefresh(
     result = await dependencies.purchase(currentAccount, app);
   }
 
-  await updateAccount({
+  const updatedAccount = {
     ...currentAccount,
     cookies: result.updatedCookies,
-  });
-  return result;
+  };
+  await updateAccount(updatedAccount);
+  return { ...result, updatedAccount };
 }
 
 export async function listVersionsWithLicense(
@@ -97,20 +103,38 @@ export async function listVersionsWithLicense(
   app: Software,
   acquireLicense: AcquireLicense,
   list: ListVersions = listVersions,
+  session?: VersionSessionDependencies,
 ) {
-  try {
-    return await list(account, app);
-  } catch (error) {
-    if (
-      !(error instanceof VersionHistoryError) ||
-      error.code !== '9610' ||
-      (app.price ?? 0) > 0
-    ) {
+  let currentAccount = account;
+  let refreshed = false;
+  let acquired = false;
+  while (true) {
+    try {
+      const result = await list(currentAccount, app);
+      const updatedAccount = { ...currentAccount, cookies: result.updatedCookies };
+      if (session) await session.updateAccount(updatedAccount);
+      return { ...result, updatedAccount };
+    } catch (error) {
+      if (!(error instanceof VersionHistoryError)) throw error;
+      if (session && !refreshed && error.code &&
+          EXPIRED_PASSWORD_TOKEN_CODES.has(error.code)) {
+        refreshed = true;
+        currentAccount = await session.renew(
+          currentAccount.email, currentAccount.password, undefined,
+          currentAccount.cookies, currentAccount.deviceIdentifier,
+        );
+        // Persist the new token even if the next version request fails.
+        await session.updateAccount(currentAccount);
+        continue;
+      }
+      if (!acquired && error.code === '9610' && (app.price ?? 0) === 0) {
+        acquired = true;
+        const license = await acquireLicense(currentAccount, app);
+        currentAccount = { ...(license.updatedAccount ?? currentAccount), cookies: license.updatedCookies };
+        continue;
+      }
       throw error;
     }
-
-    const license = await acquireLicense(account, app);
-    return list({ ...account, cookies: license.updatedCookies }, app);
   }
 }
 
@@ -230,7 +254,9 @@ export function useDownloadAction({ localFeedback = false } = {}) {
   }
 
   async function loadVersions(account: Account, app: Software) {
-    return listVersionsWithLicense(account, app, acquireLicense);
+    return listVersionsWithLicense(account, app, acquireLicense, listVersions, {
+      renew: authenticate, updateAccount,
+    });
   }
 
   function toastDownloadError(account: Account, app: Software, error: unknown) {

@@ -519,6 +519,7 @@
       "unsafeArchive": "The package contains an unsafe file path."
     },
     "download": {
+      "versionRequestFailed": "Apple version history request failed (HTTP {{status}}). Reauthenticate the account; if authentication also returns 204/403, check the VPS outbound network or API compatibility.",
       "redirectLocation": "Failed to retrieve redirect location",
       "passwordExpired": "Password token is expired",
       "licenseRequired": "License required - purchase the app first",
@@ -549,6 +550,8 @@
       "requiresVerification": "Authentication requires verification code. If no verification code was prompted, try logging in at https://account.apple.com to trigger the alert and fill the code in the 2FA Code field.",
       "redirectLocation": "Failed to retrieve redirect location",
       "emptyBody": "Authentication failed: server returned HTTP {{status}} with empty body",
+      "unusableResponse": "Apple returned no usable authentication result (HTTP {{status}}). Avoid repeated attempts; if this persists, check the VPS outbound network or Apple API compatibility.",
+      "rateLimited": "Apple requested a longer wait. Automatic retries stopped; please authenticate again later.",
       "sapUnavailable": "The SAP signing service is unavailable. Please try again.",
       "invalidRedirect": "Apple returned an unsafe or unsupported authentication redirect",
       "tooManyRedirects": "Apple authentication returned too many redirects",

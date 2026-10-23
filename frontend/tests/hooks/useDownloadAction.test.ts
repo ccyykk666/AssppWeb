@@ -41,7 +41,7 @@ describe("purchaseWithTokenRefresh", () => {
         purchase,
         renew,
       }),
-    ).resolves.toBe(purchased);
+    ).resolves.toMatchObject(purchased);
 
     expect(purchase).toHaveBeenCalledOnce();
     expect(renew).not.toHaveBeenCalled();
@@ -68,7 +68,7 @@ describe("purchaseWithTokenRefresh", () => {
           purchase,
           renew,
         }),
-      ).resolves.toBe(purchased);
+      ).resolves.toMatchObject(purchased);
 
       expect(purchase).toHaveBeenNthCalledWith(1, account, app);
       expect(renew).toHaveBeenCalledWith(
@@ -106,6 +106,43 @@ describe("purchaseWithTokenRefresh", () => {
 });
 
 describe("listVersionsWithLicense", () => {
+  it.each(['2034', '2042'])('renews an expired version session %s exactly once and preserves its new token', async (code) => {
+    const renewed = { ...account, passwordToken: 'new-token', pod: '30' };
+    const list = vi.fn().mockRejectedValueOnce(new VersionHistoryError('expired', code))
+      .mockResolvedValueOnce({ versions: ['123'], updatedCookies: purchased.updatedCookies });
+    const session = { renew: vi.fn().mockResolvedValue(renewed), updateAccount: vi.fn().mockResolvedValue(undefined) };
+    const result = await listVersionsWithLicense(account, app, vi.fn(), list, session);
+    expect(session.renew).toHaveBeenCalledOnce();
+    expect(list).toHaveBeenNthCalledWith(2, renewed, app);
+    expect(result.updatedAccount).toMatchObject({ passwordToken: 'new-token', pod: '30', cookies: purchased.updatedCookies });
+    expect(session.updateAccount).toHaveBeenLastCalledWith(result.updatedAccount);
+  });
+
+  it('does not loop when refreshed credentials are rejected again', async () => {
+    const error = new VersionHistoryError('expired', '2034');
+    const list = vi.fn().mockRejectedValue(error);
+    const session = { renew: vi.fn().mockResolvedValue(account), updateAccount: vi.fn().mockResolvedValue(undefined) };
+    await expect(listVersionsWithLicense(account, app, vi.fn(), list, session)).rejects.toBe(error);
+    expect(session.renew).toHaveBeenCalledOnce();
+    expect(list).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not treat an unclassified HTTP 403 as permission to repeatedly sign in', async () => {
+    const error = new VersionHistoryError('HTTP 403', 'HTTP_403');
+    const session = { renew: vi.fn(), updateAccount: vi.fn() };
+    await expect(listVersionsWithLicense(account, app, vi.fn(), vi.fn().mockRejectedValue(error), session)).rejects.toBe(error);
+    expect(session.renew).not.toHaveBeenCalled();
+  });
+
+  it('uses a renewed purchase session instead of restoring its expired snapshot', async () => {
+    const renewed = { ...account, passwordToken: 'new-token', pod: '30', cookies: purchased.updatedCookies };
+    const list = vi.fn().mockRejectedValueOnce(new VersionHistoryError('license required', '9610'))
+      .mockResolvedValueOnce({ versions: ['123'], updatedCookies: purchased.updatedCookies });
+    const acquire = vi.fn().mockResolvedValue({ ...purchased, updatedAccount: renewed });
+    const result = await listVersionsWithLicense(account, app, acquire, list);
+    expect(list).toHaveBeenNthCalledWith(2, renewed, app);
+    expect(result.updatedAccount.passwordToken).toBe('new-token');
+  });
   it("acquires a free app license and retries version history once", async () => {
     const licenseRequired = new VersionHistoryError("license required", "9610");
     const list = vi

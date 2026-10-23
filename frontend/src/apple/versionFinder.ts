@@ -96,13 +96,20 @@ export async function listVersions(
       }
     }
 
-    if (response.status !== 200) {
-      throw new Error(
-        `Apple version history request failed: HTTP ${response.status}`,
+    let dict: Record<string, any> | undefined;
+    try {
+      const value = parsePlist(response.body);
+      if (value && typeof value === 'object' && !Array.isArray(value)) dict = value;
+    } catch {
+      // An empty/HTML HTTP rejection is not a plist authentication verdict.
+    }
+    if (response.status !== 200 && !dict?.failureType) {
+      throw new VersionHistoryError(
+        i18n.t('errors.download.versionRequestFailed', { status: response.status }),
+        `HTTP_${response.status}`,
       );
     }
-
-    const dict = parsePlist(response.body) as Record<string, any>;
+    if (!dict) throw new VersionHistoryError(i18n.t('errors.auth.invalidResponse', { status: response.status }));
 
     const songList = dict.songList as Record<string, any>[] | undefined;
     const noItems = !Array.isArray(songList) || songList.length === 0;
@@ -144,6 +151,9 @@ export async function listVersions(
           );
         default: {
           const message = dict.customerMessage as string | undefined;
+          if (message === 'Your password has changed.') {
+            throw new VersionHistoryError(i18n.t('errors.download.passwordExpired'), '2034');
+          }
           throw new Error(message ?? `Apple error ${failureType}`);
         }
       }

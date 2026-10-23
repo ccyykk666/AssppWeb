@@ -62,6 +62,10 @@ export function getErrorMessage(error: unknown, fallback: string): string {
   // rather than becoming a generic message merely because they contain HTTP.
   if (/[\u3400-\u9fff]/.test(message)) return message;
   const authInvalid = message.match(/^Apple returned HTTP (\d{3}) without a valid plist response$/);
+  const authUnusable = message.match(/^Apple returned no usable authentication result \(HTTP (\d{3})\)/);
+  if (authUnusable) return i18n.t('errors.auth.unusableResponse', { status: authUnusable[1] });
+  const versionHttp = message.match(/^Apple version history request failed[: (]+HTTP (\d{3})/);
+  if (versionHttp) return i18n.t('errors.download.versionRequestFailed', { status: versionHttp[1] });
   if (authInvalid) return i18n.t('errors.auth.invalidResponse', { status: authInvalid[1] });
   const purchaseHttp = message.match(/^Apple license request failed \(HTTP (\d{3})\)/);
   if (purchaseHttp) return i18n.t('errors.purchase.httpFailed', { status: purchaseHttp[1] });

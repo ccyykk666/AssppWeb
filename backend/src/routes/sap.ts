@@ -10,6 +10,8 @@ function validSignInput(value: unknown): value is SAPSignInput {
   }
   const input = value as Record<string, unknown>;
   return (
+    (input.sessionID === undefined ||
+      (typeof input.sessionID === 'string' && /^[a-f0-9]{32}$/.test(input.sessionID))) &&
     typeof input.guid === "string" &&
     input.guid.length <= 128 &&
     typeof input.setupURL === "string" &&

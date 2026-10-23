@@ -102,3 +102,38 @@ func TestHandlerRequiresInternalToken(t *testing.T) {
 		t.Fatalf("status = %d", recorder.Code)
 	}
 }
+
+func TestSigningSessionsAreFreshPerLoginButReusedWithinTheExchange(t *testing.T) {
+	created := 0
+	manager := newSignerManager(func(context.Context, sap.Config) (sap.ActionSigner, error) {
+		created++
+		return &stubSigner{}, nil
+	})
+	defer manager.close()
+	first := validRequest([]byte("login"))
+	first.SessionID = "00112233445566778899aabbccddeeff"
+	for i := 0; i < 2; i++ {
+		if _, err := manager.sign(context.Background(), first); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if created != 1 {
+		t.Fatalf("one exchange initialized %d signers", created)
+	}
+	second := first
+	second.SessionID = "ffeeddccbbaa99887766554433221100"
+	if _, err := manager.sign(context.Background(), second); err != nil {
+		t.Fatal(err)
+	}
+	if created != 2 {
+		t.Fatalf("new login reused the previous signer: count=%d", created)
+	}
+}
+
+func TestInvalidSigningSessionIsRejected(t *testing.T) {
+	input := validRequest([]byte("payload"))
+	input.SessionID = "not-valid-hex"
+	if _, _, _, err := validatedSignInput(input); err == nil {
+		t.Fatal("invalid session accepted")
+	}
+}

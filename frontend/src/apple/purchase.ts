@@ -22,6 +22,8 @@ export type PurchaseStatus = 'acquired' | 'alreadyOwned';
 export interface PurchaseResult {
   updatedCookies: Account['cookies'];
   status: PurchaseStatus;
+  // Filled by the browser action wrapper when it renews authentication.
+  updatedAccount?: Account;
 }
 
 export async function purchaseApp(
