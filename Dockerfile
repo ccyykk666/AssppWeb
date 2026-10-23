@@ -1,11 +1,13 @@
 # Stage 1: Build Apple SAP signer
-FROM golang:1.25.11-bookworm AS sap-signer-build
+FROM --platform=$BUILDPLATFORM golang:1.25.11-bookworm AS sap-signer-build
 WORKDIR /src
 COPY sap-signer/go.mod sap-signer/go.sum ./
 RUN go mod download
 COPY sap-signer/ ./
 RUN go test ./...
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/asspp-sap-signer ./cmd/asspp-sap-signer
+ARG TARGETOS
+ARG TARGETARCH
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o /out/asspp-sap-signer ./cmd/asspp-sap-signer
 
 # Stage 2: Build frontend
 FROM node:20-alpine AS frontend-build
