@@ -26,7 +26,7 @@ describe('apple/bag', () => {
   it('parses the complete SAP configuration advertised by Apple', () => {
     expect(parseBagConfiguration(buildPlist(validBag))).toEqual({
       authURL:
-        'https://buy.itunes.apple.com/WebObjects/MZFinance.woa/wa/authenticate',
+        'https://buy.itunes.apple.com/WebObjects/MZFinance.woa/wa/authenticate/',
       sap: {
         setupURL:
           'https://fpinit.itunes.apple.com/v1/signSapSetup/legacy',
@@ -50,6 +50,16 @@ describe('apple/bag', () => {
     };
     expect(parseBagConfiguration(buildPlist(bag)).sap.version).toBe(200);
   });
+
+  it.each(['buy.itunes.apple.com', 'p30-buy.itunes.apple.com'])(
+    'normalizes the auth path on %s without losing routing parameters', (host) => {
+      for (const suffix of ['', '/', '///']) {
+        const authURL = `https://${host}/WebObjects/MZFinance.woa/wa/authenticate${suffix}?routing=opaque&guid=old`;
+        expect(parseBagConfiguration(buildPlist({ urlBag: { ...validBag.urlBag, authenticateAccount: authURL } })).authURL)
+          .toBe(`https://${host}/WebObjects/MZFinance.woa/wa/authenticate/?routing=opaque&guid=old`);
+      }
+    },
+  );
 
   it('rejects missing or untrusted SAP endpoints', () => {
     expect(() =>

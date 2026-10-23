@@ -1,5 +1,5 @@
 import { authHeaders } from '../api/client';
-import { normalizeDeviceId } from './config';
+import { normalizeDeviceId, normalizeLegacyAuthURL } from './config';
 import { parsePlist } from './plist';
 
 export interface SAPConfiguration {
@@ -31,14 +31,16 @@ function bagValue(
 
 function validAuthenticationURL(value: string): boolean {
   try {
-    const url = new URL(value);
+    const url = normalizeLegacyAuthURL(value);
     const appleHost =
       url.hostname === 'buy.itunes.apple.com' ||
       /^p\d+-buy\.itunes\.apple\.com$/.test(url.hostname);
     return (
       url.protocol === 'https:' &&
+      !url.username && !url.password && !url.hash &&
+      (url.port === '' || url.port === '443') &&
       appleHost &&
-      url.pathname === '/WebObjects/MZFinance.woa/wa/authenticate'
+      url.pathname === '/WebObjects/MZFinance.woa/wa/authenticate/'
     );
   } catch {
     return false;
@@ -105,7 +107,7 @@ export function parseBagConfiguration(xml: string): BagOutput {
   }
 
   return {
-    authURL,
+    authURL: normalizeLegacyAuthURL(authURL).toString(),
     // Only this exact Apple endpoint is supported; never forward credentials
     // to a host/path/query supplied by an unexpected bag response.
     ...(bagValue(root, urlBag, 'updateProduct') ===

@@ -67,6 +67,7 @@ describe('apple/authenticate', () => {
     expect(endpoint.searchParams.get('guid')).toBe('AABBCCDDEEFF');
     expect(endpoint.searchParams.getAll('guid')).toHaveLength(1);
     expect(endpoint.searchParams.get('foo')).toBe('1');
+    expect(endpoint.pathname).toBe('/WebObjects/MZFinance.woa/wa/authenticate/');
     expect(parsePlist(body)).toMatchObject({
       appleId: 'test@example.com',
       attempt: '4',
@@ -137,6 +138,16 @@ describe('apple/authenticate', () => {
       parsePlist(vi.mocked(appleRequest).mock.calls[1][0].body as string)
         .attempt,
     ).toBe('4');
+  });
+
+  it.each([301, 302, 303, 307, 308])('normalizes relative pod routing on HTTP %s', async (status) => {
+    vi.mocked(appleRequest).mockResolvedValueOnce({
+      status, statusText: '', body: '', rawHeaders: [],
+      headers: { location: '/WebObjects/MZFinance.woa/wa/authenticate?Pod=30&PRH=30' },
+    }).mockResolvedValueOnce(successfulResponse());
+    await authenticate('redirect@example.com', 'password', undefined, [], 'AABBCCDDEEFF');
+    expect(vi.mocked(appleRequest).mock.calls[1][0].path)
+      .toBe('/WebObjects/MZFinance.woa/wa/authenticate/?Pod=30&PRH=30');
   });
 
   it('retries transient Apple edge failures with production backoff', async () => {

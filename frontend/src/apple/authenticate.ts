@@ -1,6 +1,6 @@
 import i18n from '../i18n';
 import { fetchBag, type SAPConfiguration } from './bag';
-import { normalizeDeviceId } from './config';
+import { normalizeDeviceId, normalizeLegacyAuthURL } from './config';
 import { extractAndMergeCookies } from './cookies';
 import { buildPlist, parsePlist } from './plist';
 import { appleRequest, type AppleResponse } from './request';
@@ -9,7 +9,7 @@ import type { Account, Cookie } from '../types';
 
 const INVALID_CREDENTIALS_FAILURE = '-5000';
 const BAD_LOGIN_MESSAGE = 'MZFinance.BadLogin.Configurator_message';
-const AUTHENTICATION_PATH = '/WebObjects/MZFinance.woa/wa/authenticate';
+const AUTHENTICATION_PATH = '/WebObjects/MZFinance.woa/wa/authenticate/';
 const MAX_REDIRECTS = 3;
 const MAX_TRANSPORT_ATTEMPTS = 3;
 const AUTHENTICATION_RETRY_DELAY_MS = 10_000;
@@ -52,7 +52,7 @@ export class AuthenticationError extends Error {
 
 function validAuthenticationRedirect(value: string, base?: URL): URL | undefined {
   try {
-    const url = new URL(value, base);
+    const url = normalizeLegacyAuthURL(value, base);
     const appleHost =
       url.hostname === 'buy.itunes.apple.com' ||
       /^p\d+-buy\.itunes\.apple\.com$/.test(url.hostname);

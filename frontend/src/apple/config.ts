@@ -1,6 +1,19 @@
 export const userAgent =
   "Configurator/2.17 (Macintosh; OS X 15.2; 24C5089c) AppleWebKit/0620.1.16.11.6";
 
+// Apple treats the bare legacy action differently, even with a valid SAP signature.
+// Normalize only this exact action on approved hosts; preserve opaque routing queries.
+export function normalizeLegacyAuthURL(value: string, base?: URL): URL {
+  const url = new URL(value, base);
+  if (
+    /^(?:buy|p\d+-buy)\.itunes\.apple\.com$/.test(url.hostname) &&
+    /^\/WebObjects\/MZFinance\.woa\/wa\/authenticate\/*$/.test(url.pathname)
+  ) {
+    url.pathname = '/WebObjects/MZFinance.woa/wa/authenticate/';
+  }
+  return url;
+}
+
 export const countryCodeMap: Record<string, string> = {
   AE: "143481",
   AG: "143540",
