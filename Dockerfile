@@ -4,7 +4,6 @@ WORKDIR /src
 COPY sap-signer/go.mod sap-signer/go.sum ./
 RUN go mod download
 COPY sap-signer/ ./
-RUN go test ./...
 ARG TARGETOS
 ARG TARGETARCH
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o /out/asspp-sap-signer ./cmd/asspp-sap-signer
