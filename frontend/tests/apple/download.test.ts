@@ -157,14 +157,14 @@ describe('download endpoint fallback', () => {
     vi.mocked(appleRequest).mockResolvedValueOnce(response({ songList: [] }))
       .mockResolvedValueOnce({ ...response({}, status), body: '' });
     await expect(getDownloadInfo(account, app)).rejects.toMatchObject({ code: `HTTP_${status}` });
-    expect(fetchBag).not.toHaveBeenCalled();
+    expect(fetchBag).toHaveBeenCalledTimes(1); // Read the preferred endpoint, never retry update on this status.
   });
 
   it('does not retry nonempty HTTP 500 responses', async () => {
     vi.mocked(appleRequest).mockResolvedValueOnce(response({ songList: [] }))
       .mockResolvedValueOnce(response({ customerMessage: 'Maintenance' }, 500));
     await expect(getDownloadInfo(account, app)).rejects.toMatchObject({ code: 'HTTP_500' });
-    expect(fetchBag).not.toHaveBeenCalled();
+    expect(fetchBag).toHaveBeenCalledTimes(1); // No second bag fetch or update request.
   });
 
   it('stops after one update attempt', async () => {

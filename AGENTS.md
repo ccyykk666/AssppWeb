@@ -129,6 +129,19 @@ The Wisp server validates target hosts via `hostname_whitelist` in `backend/src/
 
 ### Empty Apple Download Responses
 
+The preferred download path is the bag's exact HTTPS
+`downloaddispatch.itunes.apple.com/WebObjects/DownloadDispatch.woa/wa/ent/download`
+endpoint, using the ipatool `3411d57` request format and browser-generated
+account/device-bound kbsync (ported from AssppWeb PR #98, `67338e3`).
+Passwords, password tokens, cookies, and kbsync remain browser-side; the worker
+receives only the GUID and DSID. Public, digest-pinned Apple assets are prebaked
+into the image and served via authenticated `/api/sap-assets/:name` routes.
+Downloads, version listing and version metadata share `apple/downloadProduct.ts`.
+Pin requests to the requested/current iOS build, validate returned identity,
+never follow ent/download redirects carrying X-Token, and never turn an
+explicit expired-token/license verdict into repeated signing or login attempts.
+Keep authentication's trailing-slash URL normalization intact.
+
 When volumeStore returns no items/no explicit error, resolve the current iOS
 build from the account storefront's public catalog before redownload (explicit
 historical build IDs must remain unchanged). Only an empty redownload HTTP 500

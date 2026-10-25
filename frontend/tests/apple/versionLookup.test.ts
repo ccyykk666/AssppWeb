@@ -118,7 +118,7 @@ describe('historical version detail fallback', () => {
       .mockResolvedValueOnce(response({}))
       .mockResolvedValueOnce(response(wrong));
     await expect(getVersionMetadata(account, app, versionId)).rejects.toThrow(
-      'different app or version',
+      'different app or build',
     );
     expect(apiPost).not.toHaveBeenCalled();
   });

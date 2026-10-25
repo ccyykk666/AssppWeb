@@ -8,6 +8,7 @@ import MobileNav from "./components/Layout/MobileNav";
 import MobileHeader from "./components/Layout/MobileHeader";
 import ToastContainer from "./components/common/ToastContainer";
 import GlobalDownloadNotifier from "./components/common/GlobalDownloadNotifier";
+import KBSyncPrefetcher from './components/common/KBSyncPrefetcher';
 import NavigationProgress from "./components/common/NavigationProgress";
 import PasswordGate from "./components/Auth/PasswordGate";
 import { preloadLightweightRoutes } from "./utils/preloadRoute";
@@ -85,6 +86,7 @@ export default function App() {
       <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex text-gray-900 dark:text-gray-100 transition-colors duration-200">
         <ToastContainer />
         <GlobalDownloadNotifier />
+        <KBSyncPrefetcher />
         <NavigationProgress />
 
         <Sidebar />

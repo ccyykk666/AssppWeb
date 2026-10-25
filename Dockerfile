@@ -27,6 +27,16 @@ RUN npm ci
 COPY backend/ ./
 RUN npm run build
 
+# Public Apple assets for browser-side kbsync (verified and cached at build time).
+FROM node:20-bookworm-slim AS sap-assets
+WORKDIR /app/backend
+COPY --from=backend-build /app/backend/node_modules ./node_modules
+COPY backend/package.json ./
+COPY backend/src/config.ts ./src/config.ts
+COPY backend/src/services/sapAssets.ts ./src/services/sapAssets.ts
+COPY backend/scripts/extract-sap-assets.mts ./scripts/extract-sap-assets.mts
+RUN DATA_DIR=/tmp/sap-extract-work node --import tsx scripts/extract-sap-assets.mts /out
+
 # Stage 4: Runtime
 FROM node:20-bookworm-slim
 RUN apt-get update \
@@ -37,6 +47,7 @@ COPY --from=backend-build /app/backend/dist ./dist
 COPY --from=backend-build /app/backend/node_modules ./node_modules
 COPY --from=backend-build /app/backend/package.json ./
 COPY --from=frontend-build /app/frontend/dist ./public
+COPY --from=sap-assets /out /opt/asspp/sap-assets
 COPY --from=sap-signer-build /out/asspp-sap-signer /usr/local/bin/asspp-sap-signer
 RUN mkdir -p /data/packages /data/.cache
 EXPOSE 8080

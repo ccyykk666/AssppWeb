@@ -519,7 +519,11 @@
       "unsafeArchive": "安装包中包含不安全的文件路径。"
     },
     "download": {
-      "versionRequestFailed": "Apple 版本接口返回 HTTP {{status}}。请先重新认证账号；若认证也返回 204/403，请检查 VPS 出口网络或接口兼容性。",
+      "versionRequestFailed": "Apple 版本接口返回 HTTP {{status}}，未能获取有效的版本信息。",
+      "protocolFailed": "Apple 下载接口请求失败（HTTP {{status}}，{{reason}}）：{{endpoint}}",
+      "emptyResponse": "响应为空",
+      "invalidPlist": "响应格式无效",
+      "entFailure": "新版下载接口：{{reason}}",
       "redirectLocation": "无法获取重定向地址",
       "passwordExpired": "密码令牌已过期",
       "licenseRequired": "需要许可证 - 请先购买该应用",

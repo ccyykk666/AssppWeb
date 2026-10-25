@@ -104,7 +104,7 @@ describe('version history endpoint fallback', () => {
       .mockResolvedValueOnce(response({}))
       .mockResolvedValueOnce(response(wrong));
     await expect(listVersions(account, app)).rejects.toThrow(
-      'different app or version',
+      'different app or build',
     );
   });
 

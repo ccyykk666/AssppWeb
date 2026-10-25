@@ -519,7 +519,11 @@
       "unsafeArchive": "The package contains an unsafe file path."
     },
     "download": {
-      "versionRequestFailed": "Apple version history request failed (HTTP {{status}}). Reauthenticate the account; if authentication also returns 204/403, check the VPS outbound network or API compatibility.",
+      "versionRequestFailed": "Apple version history request failed (HTTP {{status}}) without valid version information.",
+      "protocolFailed": "Apple download request failed (HTTP {{status}}, {{reason}}): {{endpoint}}",
+      "emptyResponse": "empty response",
+      "invalidPlist": "invalid response format",
+      "entFailure": "Modern download endpoint: {{reason}}",
       "redirectLocation": "Failed to retrieve redirect location",
       "passwordExpired": "Password token is expired",
       "licenseRequired": "License required - purchase the app first",
