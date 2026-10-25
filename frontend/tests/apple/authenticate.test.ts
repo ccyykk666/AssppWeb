@@ -79,6 +79,7 @@ describe('apple/authenticate', () => {
       bag.sap,
       body,
       expect.stringMatching(/^[a-f0-9]{32}$/),
+      expect.any(AbortSignal),
     );
     expect(request.headers).toMatchObject({
       'Content-Type': 'application/x-apple-plist',

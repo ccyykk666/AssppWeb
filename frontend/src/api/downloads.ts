@@ -1,5 +1,5 @@
 import { apiGet, apiPost, apiDelete } from "./client";
-import type { DownloadTask, Software, Sinf } from "../types";
+import type { DownloadOutput, DownloadTask, Software, Sinf } from "../types";
 
 export async function fetchDownloads(
   accountHashes: string[],
@@ -34,9 +34,10 @@ export async function pauseDownload(
 export async function resumeDownload(
   id: string,
   accountHash: string,
+  replacement?: DownloadOutput,
 ): Promise<void> {
   const params = new URLSearchParams({ accountHash });
-  await apiPost(`/api/downloads/${id}/resume?${params}`);
+  await apiPost(`/api/downloads/${id}/resume?${params}`, replacement);
 }
 
 export async function deleteDownload(

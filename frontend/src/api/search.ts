@@ -60,7 +60,7 @@ export async function lookupLatestAppVersion(
     `/api/catalog-version?${params}`,
   ).then((value) => {
     catalogVersionCache.set(key, {
-      expiresAt: Date.now() + CATALOG_VERSION_CACHE_MS,
+      expiresAt: Date.now() + (value ? CATALOG_VERSION_CACHE_MS : 10_000),
       value,
     });
     return value;

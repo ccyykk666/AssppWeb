@@ -11,6 +11,7 @@ vi.mock("../../src/apple/versionMetadataCache", () => ({
 vi.mock("../../src/apple/versionLookup", () => ({
   getVersionMetadata: vi.fn(),
 }));
+vi.mock('../../src/apple/accountSession', () => ({ currentAccount: (account: Account) => account }));
 
 const account = {
   email: "cache@example.com",
@@ -23,8 +24,21 @@ const metadata: VersionMetadata = {
 };
 
 describe("version metadata resolver", () => {
+  it('lets a second CDN lookup finish while the first lookup remains slow', async () => {
+    vi.mocked(getCachedVersionMetadata).mockResolvedValue(undefined);
+    let finish!: (result: { metadata: VersionMetadata; updatedCookies: [] }) => void;
+    vi.mocked(getVersionMetadata)
+      .mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }))
+      .mockResolvedValueOnce({ metadata, updatedCookies: [] });
+    const slow = resolveVersionMetadata(account, app, 'slow');
+    const fast = resolveVersionMetadata(account, app, 'fast');
+    await expect(fast).resolves.toMatchObject({ metadata });
+    finish({ metadata, updatedCookies: [] });
+    await slow;
+  });
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(putCachedVersionMetadata).mockResolvedValue(undefined);
   });
 
   it("returns a cached historical version without contacting Apple", async () => {

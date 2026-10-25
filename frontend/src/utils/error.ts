@@ -17,6 +17,7 @@ function indexMessages(value: Record<string, unknown>, prefix: string) {
 // Translate at display time so persisted task errors follow the chosen language.
 indexMessages(english.errors, 'errors');
 errorKeys.set('Search failed', 'errors.messages.searchFailed');
+errorKeys.set('Download URL expired', 'errors.messages.downloadUrlExpired');
 errorKeys.set('Lookup failed', 'errors.messages.lookupFailed');
 errorKeys.set('Failed to fetch', 'errors.messages.networkFailed');
 errorKeys.set('fetch failed', 'errors.messages.networkFailed');

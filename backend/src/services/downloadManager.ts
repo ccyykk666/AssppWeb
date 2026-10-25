@@ -3,12 +3,24 @@ import path from "path";
 import { v4 as uuidv4 } from "uuid";
 import { config, DOWNLOAD_TIMEOUT_MS } from "../config.js";
 import { inject } from "./sinfInjector.js";
-import { ChunkedDownloader } from "./chunkedDownloader.js";
+import { ChunkedDownloader, DownloadURLExpiredError } from "./chunkedDownloader.js";
 import type { DownloadTask, Software, Sinf } from "../types/index.js";
 
 const tasks = new Map<string, DownloadTask>();
 const abortControllers = new Map<string, AbortController>();
 const chunkDownloaders = new Map<string, ChunkedDownloader>();
+// Per-task lifecycle only; does not limit or schedule unrelated downloads.
+const runningTasks = new Map<string, Promise<void>>();
+
+function launchTask(task: DownloadTask): void {
+  const previous = runningTasks.get(task.id) ?? Promise.resolve();
+  const run = previous.catch(() => undefined).then(async () => {
+    if (tasks.get(task.id) !== task || task.status !== 'pending') return;
+    await startDownload(task);
+  });
+  runningTasks.set(task.id, run);
+  run.finally(() => { if (runningTasks.get(task.id) === run) runningTasks.delete(task.id); }).catch(() => undefined);
+}
 const progressListeners = new Map<string, Set<(task: DownloadTask) => void>>();
 
 const PACKAGES_DIR = path.join(config.dataDir, "packages");
@@ -363,27 +375,30 @@ export function pauseTask(id: string): boolean {
   const task = tasks.get(id);
   if (!task || task.status !== "downloading") return false;
 
+  task.status = 'paused';
+  chunkDownloaders.get(id)?.pause();
   const controller = abortControllers.get(id);
   if (controller) {
     controller.abort();
     abortControllers.delete(id);
   }
-  const downloader = chunkDownloaders.get(id);
-  if (downloader) {
-    downloader.abort();
-    chunkDownloaders.delete(id);
-  }
-
-  task.status = "paused";
   notifyProgress(task);
   return true;
 }
 
-export function resumeTask(id: string): boolean {
+export function resumeTask(id: string, replacement?: { downloadURL: string; sinfs: Sinf[]; iTunesMetadata?: string }): boolean {
   const task = tasks.get(id);
   if (!task || task.status !== "paused") return false;
+  if (replacement) {
+    validateDownloadURL(replacement.downloadURL);
+    task.downloadURL = replacement.downloadURL;
+    task.sinfs = replacement.sinfs;
+    task.iTunesMetadata = replacement.iTunesMetadata;
+    chunkDownloaders.get(id)?.replaceURL(replacement.downloadURL);
+  }
 
-  startDownload(task);
+  task.status = 'pending';
+  launchTask(task);
   return true;
 }
 
@@ -395,6 +410,7 @@ export function createTask(
   iTunesMetadata?: string,
   bundleVersion?: string,
   pinnedVersion?: boolean,
+  externalVersionId?: string,
 ): DownloadTask {
   // Validate download URL
   validateDownloadURL(downloadURL);
@@ -415,6 +431,7 @@ export function createTask(
         ? bundleVersion.trim()
         : undefined,
     pinnedVersion: pinnedVersion === true,
+    externalVersionId: typeof externalVersionId === 'string' && /^\d+$/.test(externalVersionId) ? externalVersionId : undefined,
     iTunesMetadata,
     status: "pending",
     progress: 0,
@@ -423,7 +440,7 @@ export function createTask(
   };
 
   tasks.set(task.id, task);
-  startDownload(task);
+  launchTask(task);
   return task;
 }
 
@@ -441,7 +458,6 @@ async function startDownload(task: DownloadTask) {
   const timeout = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS);
 
   task.status = "downloading";
-  task.progress = 0;
   task.speed = "0 B/s";
   task.error = undefined;
   notifyProgress(task);
@@ -478,7 +494,7 @@ async function startDownload(task: DownloadTask) {
     // Re-validate download URL before fetching
     validateDownloadURL(task.downloadURL);
 
-    const downloader = new ChunkedDownloader(task.downloadURL, filePath, {
+    const downloader = chunkDownloaders.get(task.id) ?? new ChunkedDownloader(task.downloadURL, filePath, {
       onProgress: (info) => {
         task.speed = info.speed;
         if (info.total > 0) {
@@ -535,6 +551,19 @@ async function startDownload(task: DownloadTask) {
     persistTasks();
     notifyProgress(task);
   } catch (err) {
+    if (tasks.get(task.id) !== task || (task.status as string) === 'paused' || (task.status as string) === 'pending') {
+      clearTimeout(timeout);
+      return;
+    }
+    if (err instanceof DownloadURLExpiredError) {
+      abortControllers.delete(task.id);
+      clearTimeout(timeout);
+      task.status = 'paused';
+      task.speed = '0 B/s';
+      task.error = 'Download URL expired';
+      notifyProgress(task);
+      return;
+    }
     chunkDownloaders.delete(task.id);
     abortControllers.delete(task.id);
     clearTimeout(timeout);

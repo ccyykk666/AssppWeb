@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from "react";
-import { useParams, useLocation } from "react-router-dom";
+import { useState,useEffect,useMemo } from "react";
+import { useParams,useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import PageContainer from "../Layout/PageContainer";
 import AppIcon from "../common/AppIcon";
@@ -10,96 +10,123 @@ import { useDownloadAction } from "../../hooks/useDownloadAction";
 import { useRequestContext } from '../../hooks/useRequestContext';
 import { lookupLatestAppVersion } from '../../api/search';
 import { resolveVersionMetadata } from "../../apple/versionMetadataResolver";
+import { getCachedVersionMetadata } from '../../apple/versionMetadataCache';
+import { cachedVersionList } from '../../apple/versionListCache';
 import { getErrorMessage } from "../../utils/error";
 import { storeIdToCountry } from "../../apple/config";
-import type { Software, VersionMetadata } from "../../types";
+import type { Software,VersionMetadata } from "../../types";
 
 export default function VersionHistory() {
-  const { appId } = useParams<{ appId: string }>();
-  const location = useLocation();
-  const { accounts, updateAccount } = useAccounts();
-  const { t, i18n } = useTranslation();
-  const { startDownload, loadVersions } =
+  const { appId }=useParams<{ appId: string }>();
+  const location=useLocation();
+  const { accounts }=useAccounts();
+  const { t,i18n }=useTranslation();
+  const { startDownload,loadVersions }=
     useDownloadAction({ localFeedback: true });
 
-  const stateApp = (location.state as { app?: Software; country?: string })
+  const stateApp=(location.state as { app?: Software; country?: string })
     ?.app;
-  const stateCountry = (location.state as { country?: string })?.country;
-  const country = stateCountry ?? "US";
+  const stateCountry=(location.state as { country?: string })?.country;
+  const country=stateCountry??"US";
 
-  const [app] = useState<Software | null>(stateApp ?? null);
-  const [selectedAccount, setSelectedAccount] = useState("");
+  const [app]=useState<Software|null>(stateApp??null);
+  const [selectedAccount,setSelectedAccount]=useState("");
 
-  const filteredAccounts = useMemo(
-    () => accounts.filter((a) => storeIdToCountry(a.store) === country),
-    [accounts, country],
+  const filteredAccounts=useMemo(
+    () => accounts.filter((a) => storeIdToCountry(a.store)===country),
+    [accounts,country],
   );
-  const [versions, setVersions] = useState<string[]>([]);
-  const [versionMeta, setVersionMeta] = useState<
-    Record<string, VersionMetadata>
+  const [versions,setVersions]=useState<string[]>([]);
+  const [versionMeta,setVersionMeta]=useState<
+    Record<string,VersionMetadata>
   >({});
-  const [loadingMeta, setLoadingMeta] = useState<Record<string, boolean>>({});
-  const [metaErrors, setMetaErrors] = useState<Record<string, string>>({});
-  const captureContext = useRequestContext(`${app?.id}:${country}:${selectedAccount}`);
+  const [loadingMeta,setLoadingMeta]=useState<Record<string,boolean>>({});
+  const [metaErrors,setMetaErrors]=useState<Record<string,string>>({});
+  const captureContext=useRequestContext(`${app?.id}:${country}:${selectedAccount}`);
 
   useEffect(() => {
     setVersions([]);
     setVersionMeta({});
     setLoadingMeta({});
     setMetaErrors({});
-  }, [app?.id, country, selectedAccount]);
+  },[app?.id,country,selectedAccount]);
 
   useEffect(() => {
-    if (
-      filteredAccounts.length > 0 &&
-      !filteredAccounts.some((a) => a.email === selectedAccount)
+    if(
+      filteredAccounts.length>0&&
+      !filteredAccounts.some((a) => a.email===selectedAccount)
     ) {
       setSelectedAccount(filteredAccounts[0].email);
     }
-  }, [filteredAccounts, selectedAccount]);
+  },[filteredAccounts,selectedAccount]);
 
-  const account = filteredAccounts.find((a) => a.email === selectedAccount);
+  const account=filteredAccounts.find((a) => a.email===selectedAccount);
 
-  async function handleLoadVersions() {
-    if (!account || !app) return;
-    const isCurrent = captureContext();
-    const [result, latest] = await Promise.all([
-      loadVersions(account, app),
-      lookupLatestAppVersion(app.id, country).catch(() => null),
-    ]);
-    if (!result.updatedAccount) await updateAccount({ ...account, cookies: result.updatedCookies });
-    if (!isCurrent()) return;
+  useEffect(() => {
+    if(!account||!app) return;
+    const context=captureContext();
+    void cachedVersionList(account,app).then(async (cached) => {
+      if(!cached||!context()) return;
+      setVersions(cached.versions);
+      const entries=await Promise.all(cached.versions.slice(0,100).map(async (id) =>
+        [id,await getCachedVersionMetadata(app,id).catch(() => undefined)] as const));
+      if(!context()) return;
+      setVersionMeta(Object.fromEntries(entries.filter((entry) => entry[1])) as Record<string,VersionMetadata>);
+      // Show known rows immediately, but still ask Apple for updates in the background.
+      const result=await loadVersions(account,app,{ signal: context.signal,forceRefresh: true });
+      if(context()) setVersions(result.versions);
+    }).catch(() => undefined).finally(context.dispose);
+    return () => { context.dispose(); };
+  },[app?.id,selectedAccount,country]);
+
+  async function handleLoadVersions(signal?: AbortSignal) {
+    if(!account||!app) return;
+    const isCurrent=captureContext();
+    const latestRequest=lookupLatestAppVersion(app.id,country).catch(() => null);
+    const result=await loadVersions(account,app,{ signal: signal??isCurrent.signal,forceRefresh: true });
+    if(!isCurrent()) return;
     setVersions(result.versions);
-    if (
-      latest?.bundleID === app.bundleID && latest.version && app.releaseDate &&
-      result.versions.includes(latest.externalVersionId)
-    ) {
-      setVersionMeta((previous) => ({
-        ...previous,
-        [latest.externalVersionId]: {
-          displayVersion: latest.version,
-          releaseDate: app.releaseDate,
-        },
-      }));
-    }
+    // Neither cached row hydration nor the catalog lookup should delay the list.
+    void Promise.all(result.versions.slice(0,100).map(async (id) =>
+      [id,await getCachedVersionMetadata(app,id).catch(() => undefined)] as const))
+      .then((entries) => {
+        if(isCurrent()) setVersionMeta((previous) => ({
+          ...previous,
+          ...Object.fromEntries(entries.filter((entry) => entry[1])),
+        } as Record<string,VersionMetadata>));
+      });
+    void latestRequest.then((latest) => {
+      if(!isCurrent()) return;
+      if(
+        latest?.bundleID===app.bundleID&&latest.version===app.version&&app.releaseDate&&
+        result.versions.includes(latest.externalVersionId)
+      ) {
+        setVersionMeta((previous) => ({
+          ...previous,
+          [latest.externalVersionId]: {
+            displayVersion: latest.version,
+            releaseDate: app.releaseDate,
+          },
+        }));
+      }
+    }).finally(isCurrent.dispose);
   }
 
   async function handleLoadMeta(versionId: string) {
-    if (!account || !app || versionMeta[versionId] || loadingMeta[versionId]) return;
-    const isCurrent = captureContext();
-    setLoadingMeta((prev) => ({ ...prev, [versionId]: true }));
+    if(!account||!app||versionMeta[versionId]||loadingMeta[versionId]) return;
+    const isCurrent=captureContext();
+    setLoadingMeta((prev) => ({ ...prev,[versionId]: true }));
     setMetaErrors((previous) => {
-      const next = { ...previous };
+      const next={ ...previous };
       delete next[versionId];
       return next;
     });
     try {
-      const result = await resolveVersionMetadata(account, app, versionId);
-      await updateAccount({ ...account, cookies: result.updatedCookies });
-      if (!isCurrent()) return;
-      setVersionMeta((prev) => ({ ...prev, [versionId]: result.metadata }));
-    } catch (error) {
-      if (!isCurrent()) return;
+      const result=await resolveVersionMetadata(account,app,versionId,isCurrent.signal);
+      if(!isCurrent()) return;
+      setVersionMeta((prev) => ({ ...prev,[versionId]: result.metadata }));
+    } catch(error) {
+      if(!isCurrent()) return;
       setMetaErrors((previous) => ({
         ...previous,
         [versionId]: getErrorMessage(
@@ -108,16 +135,17 @@ export default function VersionHistory() {
         ),
       }));
     } finally {
-      if (isCurrent()) setLoadingMeta((prev) => ({ ...prev, [versionId]: false }));
+      isCurrent.dispose();
+      if(isCurrent()) setLoadingMeta((prev) => ({ ...prev,[versionId]: false }));
     }
   }
 
-  async function handleDownloadVersion(versionId: string) {
-    if (!account || !app) return;
-    await startDownload(account, app, versionId);
+  async function handleDownloadVersion(versionId: string,signal?: AbortSignal) {
+    if(!account||!app) return;
+    await startDownload(account,app,versionId,signal);
   }
 
-  if (!app) {
+  if(!app) {
     return (
       <PageContainer title={t("search.versions.title")}>
         <p className="text-gray-500">{t("search.versions.unavailable")}</p>
@@ -140,12 +168,12 @@ export default function VersionHistory() {
           </div>
         </div>
 
-        {accounts.length > 0 && filteredAccounts.length === 0 ? (
+        {accounts.length>0&&filteredAccounts.length===0? (
           <div className="p-4 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-lg text-sm text-yellow-700 dark:text-yellow-400">
             {t("search.product.noAccountsForRegion")}
           </div>
-        ) : (
-          filteredAccounts.length > 0 && (
+        ):(
+          filteredAccounts.length>0&&(
             <div className="flex items-end gap-3">
               <div className="flex-1">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -165,7 +193,7 @@ export default function VersionHistory() {
               </div>
               <ActionButton
                 action={handleLoadVersions}
-                label={versions.length > 0 ? t('search.versions.refresh') : t('search.versions.load')}
+                label={versions.length>0? t('search.versions.refresh'):t('search.versions.load')}
                 pendingLabel={t('search.versions.loading')}
                 successLabel={t('common.versionsLoaded')}
                 errorLabel={t('search.versions.loadFailed')}
@@ -177,12 +205,12 @@ export default function VersionHistory() {
           )
         )}
 
-        {versions.length > 0 && (
+        {versions.length>0&&(
           <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 divide-y divide-gray-200 dark:divide-gray-800">
             {versions.map((versionId) => {
-              const meta = versionMeta[versionId];
-              const isLoadingMeta = loadingMeta[versionId];
-              const metaError = metaErrors[versionId];
+              const meta=versionMeta[versionId];
+              const isLoadingMeta=loadingMeta[versionId];
+              const metaError=metaErrors[versionId];
 
               return (
                 <div
@@ -191,14 +219,14 @@ export default function VersionHistory() {
                 >
                   <div>
                     <p className="text-sm font-medium text-gray-900 dark:text-white">
-                      {meta ? `v${meta.displayVersion}` : t('search.versions.buildId', { id: versionId })}
+                      {meta? `v${meta.displayVersion}`:t('search.versions.buildId',{ id: versionId })}
                     </p>
-                    {meta && (
+                    {meta&&(
                       <p className="text-xs text-gray-500 dark:text-gray-400">
                         {new Date(meta.releaseDate).toLocaleDateString(i18n.resolvedLanguage)}
                       </p>
                     )}
-                    {!meta && !isLoadingMeta && !metaError && (
+                    {!meta&&!isLoadingMeta&&!metaError&&(
                       <button
                         onClick={() => handleLoadMeta(versionId)}
                         className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 py-1 transition-colors"
@@ -206,13 +234,13 @@ export default function VersionHistory() {
                         {t("search.versions.loadDetails")}
                       </button>
                     )}
-                    {isLoadingMeta && (
+                    {isLoadingMeta&&(
                       <span className="inline-flex items-center gap-1.5 text-xs text-gray-400 dark:text-gray-500">
                         <Spinner />
                         {t("search.versions.loading")}
                       </span>
                     )}
-                    {metaError && !isLoadingMeta && (
+                    {metaError&&!isLoadingMeta&&(
                       <div className="mt-1">
                         <p className="text-xs text-red-600 dark:text-red-400">
                           {metaError}
@@ -227,7 +255,7 @@ export default function VersionHistory() {
                     )}
                   </div>
                   <ActionButton
-                    action={() => handleDownloadVersion(versionId)}
+                    action={(signal) => handleDownloadVersion(versionId,signal)}
                     label={t('search.versions.download')}
                     pendingLabel={t('search.versions.downloading')}
                     successLabel={t('common.downloadQueued')}

@@ -15,6 +15,27 @@ const mockAccount: Account = {
 };
 
 describe("store/accounts", () => {
+  it('ignores cookies from an old session after a concurrent reauthentication', async () => {
+    const store = useAccountsStore.getState();
+    await store.addAccount(mockAccount);
+    const renewed = { ...mockAccount, passwordToken: 'fresh-token', pod: '30' };
+    await store.updateAccount(renewed);
+    await store.updateAccount({ ...mockAccount, cookies: [{ name: 'stale', value: 'old', path: '/', httpOnly: true, secure: true }] }, mockAccount);
+    await store.loadAccounts();
+    expect(useAccountsStore.getState().accounts[0]).toMatchObject({ passwordToken: 'fresh-token', pod: '30', cookies: [] });
+  });
+
+  it('merges independent concurrent cookie updates without dropping either response', async () => {
+    const store = useAccountsStore.getState();
+    await store.addAccount(mockAccount);
+    const cookie = (name: string) => ({ name, value: name, path: '/', httpOnly: true, secure: true });
+    await Promise.all([
+      store.updateAccount({ ...mockAccount, cookies: [cookie('a')] }, mockAccount),
+      store.updateAccount({ ...mockAccount, cookies: [cookie('b')] }, mockAccount),
+    ]);
+    await store.loadAccounts();
+    expect(useAccountsStore.getState().accounts[0].cookies.map((c) => c.name).sort()).toEqual(['a', 'b']);
+  });
   beforeEach(async () => {
     // Clear the store
     const state = useAccountsStore.getState();

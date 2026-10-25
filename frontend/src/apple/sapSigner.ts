@@ -20,6 +20,7 @@ export async function signSAPAction(
   configuration: SAPConfiguration,
   body: string,
   sessionID?: string,
+  signal?: AbortSignal,
 ): Promise<string> {
   const result = await apiPost<SAPSignResponse>("/api/sap/sign", {
     guid,
@@ -28,7 +29,7 @@ export async function signSAPAction(
     version: configuration.version,
     body: base64FromString(body),
     ...(sessionID ? { sessionID } : {}),
-  });
+  }, signal, 90_000);
   if (typeof result.signature !== "string" || !result.signature) {
     throw new Error("SAP signer returned an invalid signature");
   }

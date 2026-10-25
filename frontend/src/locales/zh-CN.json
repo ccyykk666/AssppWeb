@@ -457,6 +457,7 @@
       "networkCode": "网络请求失败，请稍后重试。（错误码：{{code}}）",
       "networkFailed": "无法连接到服务器，请检查网络后重试。",
       "timedOut": "请求超时，请稍后重试。",
+      "downloadUrlExpired": "下载地址已过期，点击继续以重新获取地址。",
       "cancelled": "请求已取消。",
       "httpFailed": "请求失败（HTTP {{status}}），请稍后重试。",
       "appleCode": "Apple 返回错误（错误码：{{code}}）。",

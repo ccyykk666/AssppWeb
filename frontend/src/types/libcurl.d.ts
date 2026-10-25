@@ -15,6 +15,7 @@ declare module "libcurl.js" {
     headers?: Record<string, string> | Headers;
     body?: string | ArrayBuffer | Uint8Array;
     redirect?: "follow" | "manual" | "error";
+    signal?: AbortSignal;
     proxy?: string;
     _libcurl_verbose?: number;
     _libcurl_http_version?: number;

@@ -103,12 +103,23 @@ describe('historical version detail fallback', () => {
     });
   });
 
-  it('does not retry explicit license errors', async () => {
+  it('does not automatically acquire a paid app after an explicit license error', async () => {
     vi.mocked(appleRequest).mockResolvedValue(response({ failureType: '9610' }));
-    await expect(getVersionMetadata(account, app, versionId)).rejects.toThrow(
+    await expect(getVersionMetadata(account, { ...app, price: 1 }, versionId)).rejects.toThrow(
       'License required - purchase the app first',
     );
     expect(appleRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('acquires a missing free license once and retries the exact historical version', async () => {
+    vi.mocked(appleRequest).mockResolvedValueOnce(response({ failureType: '9610' }))
+      .mockResolvedValueOnce(response({ jingleDocType: 'purchaseSuccess', status: 0 }))
+      .mockResolvedValueOnce(response(success));
+    await expect(getVersionMetadata(account, { ...app, price: 0 }, versionId)).resolves.toMatchObject({ metadata: resolvedMetadata });
+    const requests = vi.mocked(appleRequest).mock.calls.map(([request]) => request);
+    expect(requests).toHaveLength(3);
+    expect(requests[1].path).toContain('/buyProduct');
+    expect(parsePlist(requests[2].body!)).toMatchObject({ externalVersionId: versionId });
   });
 
   it('rejects mismatched fallback metadata', async () => {

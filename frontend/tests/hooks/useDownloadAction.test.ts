@@ -31,6 +31,21 @@ const purchased: PurchaseResult = {
 };
 
 describe("purchaseWithTokenRefresh", () => {
+  it('shares a single renewal when two actions discover the same expired session', async () => {
+    const renewed = { ...account, passwordToken: 'fresh-token' };
+    const renew = vi.fn().mockResolvedValue(renewed);
+    const save = vi.fn().mockResolvedValue(undefined);
+    const purchase = vi.fn(async (current: Account) => {
+      if (current.passwordToken === account.passwordToken) throw new PurchaseError('expired', '2034');
+      return purchased;
+    });
+    const results = await Promise.all([
+      purchaseWithTokenRefresh(account, app, save, { purchase, renew }),
+      purchaseWithTokenRefresh(account, app, save, { purchase, renew }),
+    ]);
+    expect(renew).toHaveBeenCalledOnce();
+    expect(results.every((result) => result.updatedAccount?.passwordToken === 'fresh-token')).toBe(true);
+  });
   it("uses a valid password token without authenticating again", async () => {
     const purchase = vi.fn().mockResolvedValue(purchased);
     const renew = vi.fn();
@@ -49,7 +64,7 @@ describe("purchaseWithTokenRefresh", () => {
     expect(updateAccount).toHaveBeenCalledWith({
       ...account,
       cookies: purchased.updatedCookies,
-    });
+    }, account);
   });
 
   it.each(["2034", "2042"])(
@@ -79,11 +94,11 @@ describe("purchaseWithTokenRefresh", () => {
         account.deviceIdentifier,
       );
       expect(purchase).toHaveBeenNthCalledWith(2, renewed, app);
-      expect(updateAccount).toHaveBeenNthCalledWith(1, renewed);
+      expect(updateAccount).toHaveBeenNthCalledWith(1, renewed, account);
       expect(updateAccount).toHaveBeenNthCalledWith(2, {
         ...renewed,
         cookies: purchased.updatedCookies,
-      });
+      }, renewed);
     },
   );
 
@@ -115,7 +130,7 @@ describe("listVersionsWithLicense", () => {
     expect(session.renew).toHaveBeenCalledOnce();
     expect(list).toHaveBeenNthCalledWith(2, renewed, app);
     expect(result.updatedAccount).toMatchObject({ passwordToken: 'new-token', pod: '30', cookies: purchased.updatedCookies });
-    expect(session.updateAccount).toHaveBeenLastCalledWith(result.updatedAccount);
+    expect(session.updateAccount).toHaveBeenLastCalledWith(result.updatedAccount, renewed);
   });
 
   it('does not loop when refreshed credentials are rejected again', async () => {

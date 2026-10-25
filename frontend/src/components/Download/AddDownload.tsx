@@ -113,25 +113,25 @@ export default function AddDownload() {
     }
   }
 
-  async function handleGetLicense() {
+  async function handleGetLicense(signal?: AbortSignal) {
     if (!account || !app) return;
-    const result = await acquireLicense(account, app);
+    const result = await acquireLicense(account, app, signal);
     return result.status === 'alreadyOwned' ? t('common.licenseOwned') : t('common.licenseAcquired');
   }
 
-  async function handleLoadVersions() {
+  async function handleLoadVersions(signal?: AbortSignal) {
     if (!account || !app) return;
     const isCurrent = captureContext();
-    const result = await loadVersions(account, app);
-    if (!result.updatedAccount) await updateAccount({ ...account, cookies: result.updatedCookies });
+    const result = await loadVersions(account, app, { signal: signal ?? isCurrent.signal, forceRefresh: true });
+    isCurrent.dispose();
     if (!isCurrent()) return;
     setVersions(result.versions);
     setStep('versions');
   }
 
-  async function handleDownload() {
+  async function handleDownload(signal?: AbortSignal) {
     if (!account || !app) return;
-    await startDownload(account, app, selectedVersion || undefined);
+    await startDownload(account, app, selectedVersion || undefined, signal);
   }
 
   return (

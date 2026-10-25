@@ -36,7 +36,7 @@ describe('preferred ent/download protocol', () => {
     vi.mocked(appleRequest).mockResolvedValueOnce(success());
     const result = await downloadProduct(account, app);
     expect(result.dict.songList[0].metadata.softwareVersionExternalIdentifiers).toEqual(['100','200']);
-    expect(obtainKBSync).toHaveBeenCalledWith(account.deviceIdentifier, 123);
+    expect(obtainKBSync).toHaveBeenCalledWith(account.deviceIdentifier, 123, expect.any(AbortSignal));
     const request = vi.mocked(appleRequest).mock.calls[0][0];
     expect(request.host).toBe('downloaddispatch.itunes.apple.com');
     expect(request.headers).toMatchObject({ 'X-Token': 'fixture-token', 'X-Apple-Store-Front': '143465-1', 'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8' });

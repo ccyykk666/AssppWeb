@@ -85,6 +85,7 @@ router.post("/downloads", async (req: Request, res: Response) => {
     sinfs,
     bundleVersion,
     pinnedVersion,
+    externalVersionId,
     iTunesMetadata,
   } = req.body;
 
@@ -141,6 +142,7 @@ router.post("/downloads", async (req: Request, res: Response) => {
       iTunesMetadata,
       bundleVersion,
       pinnedVersion,
+      externalVersionId,
     );
     res.status(201).json(sanitizeTaskForResponse(task));
   } catch (err) {
@@ -260,7 +262,19 @@ router.post("/downloads/:id/resume", (req: Request, res: Response) => {
 
   if (!verifyTaskOwnership(task, accountHash, res)) return;
 
-  const success = resumeTask(id);
+  let replacement;
+  if (req.body?.downloadURL) {
+    if (!task.externalVersionId || req.body.externalVersionId !== task.externalVersionId ||
+        req.body.bundleVersion !== task.bundleVersion || !Array.isArray(req.body.sinfs) ||
+        req.body.sinfs.length === 0 || req.body.sinfs.some((s: any) => typeof s?.sinf !== 'string' || typeof s?.id !== 'number')) {
+      res.status(400).json({ error: 'Replacement download does not match the paused version' });
+      return;
+    }
+    try { validateDownloadURL(req.body.downloadURL); }
+    catch { res.status(400).json({ error: 'Invalid replacement download URL' }); return; }
+    replacement = { downloadURL: req.body.downloadURL, sinfs: req.body.sinfs, iTunesMetadata: req.body.iTunesMetadata };
+  }
+  const success = resumeTask(id, replacement);
   if (!success) {
     res.status(400).json({ error: "Cannot resume this download" });
     return;

@@ -24,12 +24,16 @@ const TARGET_CHUNK_SIZE = 32 * 1024 * 1024;
 
 type ProgressCallback = (info: ProgressInfo) => void;
 
+export class DownloadURLExpiredError extends Error {
+  constructor() { super('Download URL expired'); this.name = 'DownloadURLExpiredError'; }
+}
+
 /**
  * Multi-threaded HTTP downloader using Range requests.
  * Falls back to single-stream when the server doesn't support Range.
  */
 export class ChunkedDownloader {
-  private readonly url: string;
+  private url: string;
   private readonly destPath: string;
   private readonly threads: number;
   private readonly onProgress?: ProgressCallback;
@@ -38,6 +42,8 @@ export class ChunkedDownloader {
   private aborted = false;
   private chunkBytes: number[] = [];
   private totalSize = 0;
+  private paused = false;
+  private checkpoint?: { size: number; validator: string; chunks: ChunkRange[] };
   private lastProgressTime = 0;
   private lastProgressBytes = 0;
 
@@ -56,13 +62,15 @@ export class ChunkedDownloader {
   private async probe(signal: AbortSignal): Promise<{
     supportsRange: boolean;
     contentLength: number;
+    validator: string;
   }> {
     const res = await fetch(this.url, {
       method: "HEAD",
-      signal,
+      signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
       redirect: "follow",
     });
     if (!res.ok) {
+      if (res.status === 401 || res.status === 403) throw new DownloadURLExpiredError();
       throw new Error(`HEAD failed: HTTP ${res.status}`);
     }
 
@@ -73,7 +81,9 @@ export class ChunkedDownloader {
     );
     const supportsRange = acceptRanges === "bytes" && contentLength > 0;
 
-    return { supportsRange, contentLength };
+    const etag = res.headers.get('etag');
+    const validator = etag && !etag.startsWith('W/') ? etag : res.headers.get('last-modified') ?? '';
+    return { supportsRange, contentLength, validator };
   }
 
   /** Split total size into chunk ranges. */
@@ -104,27 +114,38 @@ export class ChunkedDownloader {
     let lastErr: Error | undefined;
 
     for (let attempt = 0; attempt < CHUNK_RETRY_COUNT; attempt++) {
-      if (this.aborted) throw new Error("Aborted");
+      if (this.aborted || signal.aborted) throw new DOMException('Aborted', 'AbortError');
 
       const ac = new AbortController();
       this.abortControllers.add(ac);
       const onAbort = () => ac.abort();
       signal.addEventListener("abort", onAbort, { once: true });
       if (signal.aborted) ac.abort();
+      let idleTimer = setTimeout(() => ac.abort(), 60_000);
 
       try {
         this.chunkBytes[chunk.index] = 0;
         const res = await fetch(this.url, {
           signal: ac.signal,
           redirect: "follow",
-          headers: { Range: `bytes=${chunk.start}-${chunk.end}` },
+          headers: {
+            Range: `bytes=${chunk.start}-${chunk.end}`,
+            ...(this.checkpoint?.validator ? { 'If-Range': this.checkpoint.validator } : {}),
+          },
         });
 
         if (res.status !== 206) {
+          await res.body?.cancel();
+          if (res.status === 401 || res.status === 403) throw new DownloadURLExpiredError();
           throw new Error(`Chunk ${chunk.index}: HTTP ${res.status}`);
         }
         if (!res.body) {
           throw new Error(`Chunk ${chunk.index}: no body`);
+        }
+        const contentRange = res.headers.get('content-range');
+        if (contentRange && contentRange !== `bytes ${chunk.start}-${chunk.end}/${this.totalSize}`) {
+          await res.body.cancel();
+          throw new Error('CDN returned a different byte range');
         }
 
         const ws = fs.createWriteStream(this.destPath, {
@@ -140,6 +161,8 @@ export class ChunkedDownloader {
           async read() {
             try {
               const { done, value } = await reader.read();
+              clearTimeout(idleTimer);
+              idleTimer = setTimeout(() => ac.abort(), 60_000);
               if (done) {
                 this.push(null);
                 return;
@@ -159,7 +182,13 @@ export class ChunkedDownloader {
           },
         });
 
-        await pipeline(readable, ws);
+        try {
+          await pipeline(readable, ws);
+        } catch (error) {
+          // Only complete, length-checked ranges are retained as checkpoints.
+          this.chunkBytes[chunk.index] = 0;
+          throw error;
+        }
         if (chunkDownloaded !== expectedBytes) {
           throw new Error(
             `Chunk ${chunk.index}: expected ${expectedBytes} bytes, received ${chunkDownloaded}`,
@@ -168,11 +197,12 @@ export class ChunkedDownloader {
         return; // success
       } catch (err) {
         lastErr = err instanceof Error ? err : new Error(String(err));
-        if (lastErr.name === "AbortError" || this.aborted) throw lastErr;
+        if (lastErr.name === "AbortError" || this.aborted || lastErr instanceof DownloadURLExpiredError) throw lastErr;
         if (attempt < CHUNK_RETRY_COUNT - 1) {
           await new Promise((r) => setTimeout(r, CHUNK_RETRY_DELAY_MS));
         }
       } finally {
+        clearTimeout(idleTimer);
         signal.removeEventListener("abort", onAbort);
         this.abortControllers.delete(ac);
       }
@@ -192,7 +222,11 @@ export class ChunkedDownloader {
   /** Single-stream fallback download. */
   private async downloadSingleStream(signal: AbortSignal): Promise<void> {
     const res = await fetch(this.url, { signal, redirect: "follow" });
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    if (!res.ok) {
+      await res.body?.cancel();
+      if (res.status === 401 || res.status === 403) throw new DownloadURLExpiredError();
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    }
     if (!res.body) throw new Error("No response body");
 
     const contentLength = parseInt(
@@ -263,13 +297,18 @@ export class ChunkedDownloader {
    * or falls back to single-stream.
    */
   async download(signal: AbortSignal): Promise<void> {
+    this.aborted = false;
+    this.paused = false;
     let supportsRange = false;
     let contentLength = 0;
+    let validator = '';
     try {
       const probeResult = await this.probe(signal);
       supportsRange = probeResult.supportsRange;
       contentLength = probeResult.contentLength;
-    } catch {
+      validator = probeResult.validator;
+    } catch (error) {
+      if (error instanceof DownloadURLExpiredError || signal.aborted) throw error;
       // HEAD failed — fall back to single-stream
     }
 
@@ -279,7 +318,9 @@ export class ChunkedDownloader {
       );
     }
 
-    if (!supportsRange || this.threads <= 1) {
+    if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    if (!supportsRange) {
+      this.checkpoint = undefined;
       try {
         await this.downloadSingleStream(signal);
       } catch (error) {
@@ -290,12 +331,16 @@ export class ChunkedDownloader {
     }
 
     this.totalSize = contentLength;
-    const chunks = this.splitChunks(contentLength);
-    this.chunkBytes = new Array(chunks.length).fill(0);
+    const reusable = Boolean(validator && this.checkpoint?.size === contentLength &&
+      this.checkpoint.validator === validator && fs.existsSync(this.destPath) &&
+      fs.statSync(this.destPath).size === contentLength);
+    const chunks = reusable ? this.checkpoint!.chunks : this.splitChunks(contentLength);
+    if (!reusable) this.chunkBytes = new Array(chunks.length).fill(0);
+    this.checkpoint = { size: contentLength, validator, chunks };
 
     // Preallocate the final IPA. Range workers write directly to their own
     // offsets, eliminating the previous full-file merge and duplicate disk IO.
-    const file = await fs.promises.open(this.destPath, "w");
+    const file = await fs.promises.open(this.destPath, reusable ? 'r+' : 'w');
     try {
       await file.truncate(contentLength);
     } finally {
@@ -303,7 +348,8 @@ export class ChunkedDownloader {
     }
 
     this.lastProgressTime = Date.now();
-    this.lastProgressBytes = 0;
+    this.lastProgressBytes = this.chunkBytes.reduce((sum, bytes) => sum + bytes, 0);
+    this.onProgress?.({ downloaded: this.lastProgressBytes, total: contentLength, speed: '0 B/s' });
     const progressInterval = setInterval(() => {
       const now = Date.now();
       const totalDownloaded = this.chunkBytes.reduce((a, b) => a + b, 0);
@@ -331,15 +377,21 @@ export class ChunkedDownloader {
         while (true) {
           const index = nextChunkIndex++;
           if (index >= chunks.length) return;
+          if (this.chunkBytes[index] === chunks[index].end - chunks[index].start + 1) continue;
           await this.downloadChunk(chunks[index], signal);
         }
       };
-      await Promise.all(
-        Array.from(
+      const workers = Array.from(
           { length: Math.min(this.threads, chunks.length) },
           () => worker(),
-        ),
-      );
+        );
+      try { await Promise.all(workers); }
+      catch (error) {
+        // Close every writer before a resume may reuse this file.
+        for (const controller of this.abortControllers) controller.abort();
+        await Promise.allSettled(workers);
+        throw error;
+      }
 
       clearInterval(progressInterval);
 
@@ -353,13 +405,24 @@ export class ChunkedDownloader {
       this.aborted = true;
       for (const controller of this.abortControllers) controller.abort();
       this.abortControllers.clear();
-      this.cleanDestination();
+      if (!this.paused && !(err instanceof DownloadURLExpiredError)) {
+        this.checkpoint = undefined; this.cleanDestination();
+      }
       throw err;
     }
   }
 
   /** Abort all active connections and clean up temporary files. */
+  pause(): void {
+    this.paused = true;
+    this.aborted = true;
+    for (const controller of this.abortControllers) controller.abort();
+  }
+
+  replaceURL(url: string): void { this.url = url; }
+
   abort(): void {
+    this.checkpoint = undefined;
     this.aborted = true;
     for (const ac of this.abortControllers) {
       try {

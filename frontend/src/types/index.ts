@@ -50,6 +50,7 @@ export interface Sinf {
 }
 
 export interface DownloadOutput {
+  externalVersionId?: string;
   downloadURL: string;
   sinfs: Sinf[];
   bundleShortVersionString: string;
@@ -75,6 +76,7 @@ export interface ReleaseHistoryResult {
 }
 
 export interface DownloadTask {
+  externalVersionId?: string;
   id: string;
   software: Software;
   accountHash: string;

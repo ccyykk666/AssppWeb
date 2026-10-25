@@ -12,6 +12,11 @@ import type { Account, Software } from '../../src/types';
 vi.mock('../../src/apple/request', () => ({ appleRequest: vi.fn() }));
 vi.mock('../../src/apple/bag', () => ({ fetchBag: vi.fn() }));
 vi.mock('../../src/api/search', () => ({ lookupLatestAppVersion: vi.fn() }));
+vi.mock('../../src/apple/versionListCache', () => ({
+  cachedVersionList: vi.fn().mockResolvedValue(undefined),
+  saveVersionList: vi.fn().mockResolvedValue(undefined),
+  versionListKey: (account: Account, app: Software) => `${account.email}:${app.id}`,
+}));
 
 const account = {
   email: 'test@example.com', store: '143465', pod: '25',

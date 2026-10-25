@@ -4,6 +4,7 @@
 // browser caches them in the Cache API and verifies their pinned SHA-256 digests.
 
 import { authHeaders } from '../../api/client';
+import { requestScope,throwIfAborted } from '../../utils/abort';
 import type { KBSyncAssets } from './types';
 
 export interface AssetSpec {
@@ -19,7 +20,7 @@ export interface AssetSpec {
  * original digests during extraction; see backend/src/services/sapAssets.ts
  * for both pin sets.
  */
-export const ASSET_SPECS: AssetSpec[] = [
+export const ASSET_SPECS: AssetSpec[]=[
   {
     name: 'CommerceKit',
     size: 3271840,
@@ -47,46 +48,49 @@ export const ASSET_SPECS: AssetSpec[] = [
   },
 ];
 
-const CACHE_NAME = 'asspp-kbsync-assets-v1';
+const CACHE_NAME='asspp-kbsync-assets-v1';
 
-async function fetchWithProgress(url: string, maximum: number, onProgress?: (loaded: number) => void): Promise<Uint8Array> {
-  const response = await fetch(url, { headers: authHeaders(), signal: AbortSignal.timeout(60000) });
-  if (!response.ok) {
-    throw new Error(`kbsync asset download failed: HTTP ${response.status}`);
-  }
-  if (!response.body) {
-    return new Uint8Array(await response.arrayBuffer());
-  }
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let loaded = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) {
-      break;
+async function fetchWithProgress(url: string,maximum: number,onProgress?: (loaded: number) => void,signal?: AbortSignal): Promise<Uint8Array> {
+  const scope=requestScope(signal,60_000);
+  try {
+    const response=await fetch(url,{ headers: authHeaders(),signal: scope.signal });
+    if(!response.ok) {
+      throw new Error(`kbsync asset download failed: HTTP ${response.status}`);
     }
-    chunks.push(value);
-    loaded += value.length;
-    if (loaded > maximum) { await reader.cancel(); throw new Error('Oversized kbsync asset'); }
-    onProgress?.(loaded);
-  }
-  const assembled = new Uint8Array(loaded);
-  let offset = 0;
-  for (const chunk of chunks) {
-    assembled.set(chunk, offset);
-    offset += chunk.length;
-  }
-  return assembled;
+    if(!response.body) {
+      return new Uint8Array(await response.arrayBuffer());
+    }
+    const reader=response.body.getReader();
+    const chunks: Uint8Array[]=[];
+    let loaded=0;
+    for(;;) {
+      const { done,value }=await reader.read();
+      if(done) {
+        break;
+      }
+      chunks.push(value);
+      loaded+=value.length;
+      if(loaded>maximum) { await reader.cancel(); throw new Error('Oversized kbsync asset'); }
+      onProgress?.(loaded);
+    }
+    const assembled=new Uint8Array(loaded);
+    let offset=0;
+    for(const chunk of chunks) {
+      assembled.set(chunk,offset);
+      offset+=chunk.length;
+    }
+    return assembled;
+  } finally { scope.dispose(); }
 }
 
-async function digestMatches(data: Uint8Array, expected: string): Promise<boolean> {
-  const view = new Uint8Array(data.length);
+async function digestMatches(data: Uint8Array,expected: string): Promise<boolean> {
+  const view=new Uint8Array(data.length);
   view.set(data);
-  const digest = await crypto.subtle.digest('SHA-256', view.buffer as ArrayBuffer);
-  const actual = Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, '0'))
+  const digest=await crypto.subtle.digest('SHA-256',view.buffer as ArrayBuffer);
+  const actual=Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2,'0'))
     .join('');
-  return actual === expected;
+  return actual===expected;
 }
 
 /**
@@ -95,52 +99,62 @@ async function digestMatches(data: Uint8Array, expected: string): Promise<boolea
  * ~26 MB transfer happens once.
  */
 export async function loadKBSyncAssets(
-  onProgress?: (loadedBytes: number, totalBytes: number) => void,
+  onProgress?: (loadedBytes: number,totalBytes: number) => void,
+  signal?: AbortSignal,
 ): Promise<KBSyncAssets> {
-  const totalBytes = ASSET_SPECS.reduce((sum, spec) => sum + spec.size, 0);
-  let loadedBytes = 0;
-  let cache: Cache | null = null;
+  const totalBytes=ASSET_SPECS.reduce((sum,spec) => sum+spec.size,0);
+  let loadedBytes=0;
+  let cache: Cache|null=null;
   try {
-    cache = await caches.open(CACHE_NAME);
+    cache=await caches.open(CACHE_NAME);
   } catch {
     // Cache API unavailable (private mode); fall back to direct downloads.
   }
 
-  const bundle: Record<string, Uint8Array> = {};
-  for (const spec of ASSET_SPECS) {
-    const url = `/api/sap-assets/${spec.name}`;
-    let data: Uint8Array | null = null;
+  const bundle: Record<string,Uint8Array>={};
+  const loaded=new Map<string,number>();
+  let next=0;
+  const load=async (spec: AssetSpec) => {
+    throwIfAborted(signal);
+    const url=`/api/sap-assets/${spec.name}`;
+    let data: Uint8Array|null=null;
 
-    if (cache) {
-      const cached = await cache.match(url);
-      if (cached) {
-        const cachedBytes = new Uint8Array(await cached.arrayBuffer());
-        if (await digestMatches(cachedBytes, spec.sha256)) {
-          data = cachedBytes;
+    if(cache) {
+      const cached=await cache.match(url);
+      if(cached) {
+        const cachedBytes=new Uint8Array(await cached.arrayBuffer());
+        if(await digestMatches(cachedBytes,spec.sha256)) {
+          data=cachedBytes;
         }
       }
     }
 
-    if (!data) {
-      data = await fetchWithProgress(url, spec.size, (loaded) => onProgress?.(loadedBytes + loaded, totalBytes));
-      if (!(await digestMatches(data, spec.sha256))) {
+    if(!data) {
+      data=await fetchWithProgress(url,spec.size,(bytes) => {
+        loaded.set(spec.name,bytes);
+        onProgress?.([...loaded.values()].reduce((sum,value) => sum+value,0),totalBytes);
+      },signal);
+      if(!(await digestMatches(data,spec.sha256))) {
         throw new Error(`kbsync asset ${spec.name} failed integrity verification`);
       }
-      if (cache) {
-        const copy = new Uint8Array(data);
+      if(cache) {
+        const copy=new Uint8Array(data);
         await cache.put(
           url,
-          new Response(copy.buffer as ArrayBuffer, {
+          new Response(copy.buffer as ArrayBuffer,{
             headers: { 'Content-Type': 'application/octet-stream' },
           }),
         ).catch(() => undefined);
       }
     }
 
-    loadedBytes += spec.size;
-    onProgress?.(loadedBytes, totalBytes);
-    bundle[spec.name] = data;
-  }
+    loaded.set(spec.name,spec.size);
+    loadedBytes=[...loaded.values()].reduce((sum,value) => sum+value,0);
+    onProgress?.(loadedBytes,totalBytes);
+    bundle[spec.name]=data;
+  };
+  const runner=async () => { while(next<ASSET_SPECS.length) await load(ASSET_SPECS[next++]); };
+  await Promise.all([runner(),runner()]);
 
   return {
     commerceKit: bundle['CommerceKit'],

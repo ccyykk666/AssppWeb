@@ -4,7 +4,7 @@ import { useToastStore } from '../../store/toast';
 import { getErrorMessage } from '../../utils/error';
 
 interface ActionButtonProps {
-  action: () => Promise<string | void>;
+  action: (signal?: AbortSignal) => Promise<string | void>;
   label: string;
   pendingLabel: string;
   successLabel: string;
@@ -29,6 +29,7 @@ export default function ActionButton({
   const activeContext = useRef<string | undefined>(contextKey);
   const mounted = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const controllers = useRef(new Set<AbortController>());
 
   useEffect(() => {
     generation.current++;
@@ -40,6 +41,8 @@ export default function ActionButton({
       generation.current++;
       mounted.current = false;
       clearTimeout(timer.current);
+      for (const controller of controllers.current) controller.abort(new DOMException('Cancelled', 'AbortError'));
+      controllers.current.clear();
     };
   }, [contextKey]);
 
@@ -49,17 +52,21 @@ export default function ActionButton({
     clearTimeout(timer.current);
     const current = ++generation.current;
     setPhase('pending');
+    const controller = new AbortController();
+    controllers.current.add(controller);
     try {
-      const message = await action();
+      const message = await action(controller.signal);
       if (current !== generation.current) return;
       setResult(message || successLabel);
       setPhase('success');
       timer.current = setTimeout(() => setPhase('idle'), 2400);
     } catch (cause) {
       if (current !== generation.current) return;
+      if (controller.signal.aborted) { setPhase('idle'); return; }
       addToast(getErrorMessage(cause, errorLabel), 'error', errorLabel);
       setPhase('idle');
     } finally {
+      controllers.current.delete(controller);
       running.current.delete(contextKey);
       // Returning to an account with an in-flight action must not submit twice.
       if (current !== generation.current && mounted.current && activeContext.current === contextKey) {

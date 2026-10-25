@@ -49,7 +49,7 @@ describe('product detail section order', () => {
     expect(screen.getByRole('button', { name: '下载' })).toBeEnabled();
     expect(screen.getByRole('link', { name: '历史版本' })).toHaveAttribute('href', '/search/123/versions');
     await act(async () => fireEvent.click(screen.getByRole('button', { name: '下载' })));
-    expect(startDownload).toHaveBeenCalledExactlyOnceWith(first, app);
+    expect(startDownload).toHaveBeenCalledExactlyOnceWith(first, app, undefined, expect.any(AbortSignal));
     fireEvent.change(screen.getByRole('combobox'), { target: { value: second.email } });
     expect(screen.getByRole('button', { name: '获取许可证' })).toBeEnabled();
     await act(async () => resolve({ status: 'alreadyOwned' }));

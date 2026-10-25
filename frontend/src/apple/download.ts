@@ -14,10 +14,11 @@ export async function getDownloadInfo(
   account: Account,
   app: Software,
   externalVersionId?: string,
+  signal?: AbortSignal,
 ): Promise<{ output: DownloadOutput; updatedCookies: typeof account.cookies }> {
   let result;
   try {
-    result = await downloadProduct(account, app, externalVersionId);
+    result = await downloadProduct(account, app, externalVersionId, signal);
   } catch (error) {
     if (error instanceof StoreDownloadError) throw new DownloadError(error.message, error.code);
     throw error;
@@ -70,6 +71,7 @@ export async function getDownloadInfo(
 
   return {
     output: {
+      externalVersionId: String(metadata.softwareVersionExternalIdentifier ?? externalVersionId ?? '') || undefined,
       downloadURL: url,
       sinfs,
       bundleShortVersionString: version,

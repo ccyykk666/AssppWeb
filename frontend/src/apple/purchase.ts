@@ -1,4 +1,5 @@
 import { appleRequest, type AppleResponse } from "./request";
+import { abortableDelay } from '../utils/abort';
 import { buildPlist, parsePlist } from "./plist";
 import { extractAndMergeCookies } from "./cookies";
 import { purchaseAPIHost } from "./config";
@@ -29,6 +30,7 @@ export interface PurchaseResult {
 export async function purchaseApp(
   account: Account,
   app: Software,
+  signal?: AbortSignal,
 ): Promise<PurchaseResult> {
   if ((app.price ?? 0) > 0) {
     throw new PurchaseError(i18n.t("errors.purchase.paidNotSupported"));
@@ -37,11 +39,11 @@ export async function purchaseApp(
   const preferredParameters = app.primaryGenreId === 6014 ? "GAME" : "STDQ";
   const fallbackParameters = preferredParameters === "GAME" ? "STDQ" : "GAME";
   try {
-    return await purchaseWithParams(account, app, preferredParameters);
+    return await purchaseWithParams(account, app, preferredParameters, signal);
   } catch (e) {
     // Rely on error code instead of translated message string to prevent matching issues
     if (e instanceof PurchaseError && e.code === "2059") {
-      return await purchaseWithParams(account, app, fallbackParameters);
+      return await purchaseWithParams(account, app, fallbackParameters, signal);
     }
     throw e;
   }
@@ -51,6 +53,7 @@ async function purchaseWithParams(
   account: Account,
   app: Software,
   pricingParameters: string,
+  signal?: AbortSignal,
 ): Promise<PurchaseResult> {
   const deviceId = account.deviceIdentifier;
   const host = purchaseAPIHost(account.pod);
@@ -88,7 +91,7 @@ async function purchaseWithParams(
   // Retry a temporary edge error once, never a valid Apple business response.
   for (let attempt = 0; attempt < 2; attempt++) {
     response = await appleRequest({
-      method: 'POST', host, path, headers, body: plistBody, cookies,
+      method: 'POST', host, path, headers, body: plistBody, cookies, signal,
     });
     cookies = extractAndMergeCookies(response.rawHeaders, cookies);
     try {
@@ -104,7 +107,7 @@ async function purchaseWithParams(
       const retryAfter = response.headers['retry-after'];
       const delay = retryAfter ? Number(retryAfter) * 1000 : 1000;
       if (Number.isFinite(delay) && delay >= 0 && delay <= 3000) {
-        await new Promise((resolve) => setTimeout(resolve, Math.max(delay, 1000)));
+        await abortableDelay(Math.max(delay, 1000), signal);
         continue;
       }
     }
@@ -120,6 +123,9 @@ async function purchaseWithParams(
   }
 
   const updatedCookies = cookies;
+  if (dict.customerMessage === 'Your password has changed.') {
+    throw new PurchaseError(i18n.t('errors.purchase.passwordExpired'), '2034');
+  }
 
   if (dict.failureType) {
     const failureType = String(dict.failureType);

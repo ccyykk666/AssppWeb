@@ -11,10 +11,12 @@ import {
   type PurchaseResult,
 } from "../apple/purchase";
 import { authenticate } from "../apple/authenticate";
+import { accountExchange, currentAccount as latestAccount, recoverAccountOperation, renewAccount } from '../apple/accountSession';
 import { apiPost, apiGet } from "../api/client";
 import { accountHash } from "../utils/account";
 import { getErrorMessage } from "../utils/error";
 import { getAccountContext } from "../utils/toast";
+import { joinWork, sharedWork, throwIfAborted, waitFor, type SharedWork } from '../utils/abort';
 import type { Account, Software } from "../types";
 
 interface DownloadSettings {
@@ -26,7 +28,7 @@ interface LicenseDependencies {
   renew: typeof authenticate;
 }
 
-type UpdateAccount = (account: Account) => Promise<void>;
+type UpdateAccount = (account: Account, expected?: Account) => Promise<void>;
 type AcquireLicense = (
   account: Account,
   app: Software,
@@ -45,6 +47,7 @@ const defaultLicenseDependencies: LicenseDependencies = {
 };
 
 let downloadSettingsPromise: Promise<DownloadSettings> | undefined;
+const licenseRequests = new Map<string, SharedWork<PurchaseResult> & { token: string }>();
 
 function loadDownloadSettings(): Promise<DownloadSettings> {
   if (!downloadSettingsPromise) {
@@ -63,12 +66,13 @@ export async function purchaseWithTokenRefresh(
   app: Software,
   updateAccount: UpdateAccount,
   dependencies: LicenseDependencies = defaultLicenseDependencies,
+  signal?: AbortSignal,
 ): Promise<PurchaseResult> {
-  let currentAccount = account;
+  let currentAccount = latestAccount(account);
   let result: PurchaseResult;
 
   try {
-    result = await dependencies.purchase(currentAccount, app);
+    result = await (signal ? dependencies.purchase(currentAccount, app, signal) : dependencies.purchase(currentAccount, app));
   } catch (error) {
     if (
       !(error instanceof PurchaseError) ||
@@ -78,24 +82,16 @@ export async function purchaseWithTokenRefresh(
       throw error;
     }
 
-    currentAccount = await dependencies.renew(
-      account.email,
-      account.password,
-      undefined,
-      account.cookies,
-      account.deviceIdentifier,
-    );
-    // Keep the renewed token even if Apple's follow-up purchase fails.
-    await updateAccount(currentAccount);
-    result = await dependencies.purchase(currentAccount, app);
+    currentAccount = await renewAccount(currentAccount, updateAccount, dependencies.renew, signal);
+    result = await (signal ? dependencies.purchase(currentAccount, app, signal) : dependencies.purchase(currentAccount, app));
   }
 
   const updatedAccount = {
     ...currentAccount,
     cookies: result.updatedCookies,
   };
-  await updateAccount(updatedAccount);
-  return { ...result, updatedAccount };
+  await updateAccount(updatedAccount, currentAccount);
+  return { ...result, updatedAccount: latestAccount(updatedAccount) };
 }
 
 export async function listVersionsWithLicense(
@@ -104,27 +100,24 @@ export async function listVersionsWithLicense(
   acquireLicense: AcquireLicense,
   list: ListVersions = listVersions,
   session?: VersionSessionDependencies,
+  options?: { signal?: AbortSignal; forceRefresh?: boolean },
 ) {
-  let currentAccount = account;
+  let currentAccount = latestAccount(account);
   let refreshed = false;
   let acquired = false;
   while (true) {
     try {
-      const result = await list(currentAccount, app);
+      throwIfAborted(options?.signal);
+      const result = await (options ? list(currentAccount, app, options) : list(currentAccount, app));
       const updatedAccount = { ...currentAccount, cookies: result.updatedCookies };
-      if (session) await session.updateAccount(updatedAccount);
-      return { ...result, updatedAccount };
+      if (session) await session.updateAccount(updatedAccount, currentAccount);
+      return { ...result, updatedAccount: latestAccount(updatedAccount) };
     } catch (error) {
       if (!(error instanceof VersionHistoryError)) throw error;
       if (session && !refreshed && error.code &&
           EXPIRED_PASSWORD_TOKEN_CODES.has(error.code)) {
         refreshed = true;
-        currentAccount = await session.renew(
-          currentAccount.email, currentAccount.password, undefined,
-          currentAccount.cookies, currentAccount.deviceIdentifier,
-        );
-        // Persist the new token even if the next version request fails.
-        await session.updateAccount(currentAccount);
+        currentAccount = await renewAccount(currentAccount, session.updateAccount, session.renew, options?.signal);
         continue;
       }
       if (!acquired && error.code === '9610' && (app.price ?? 0) === 0) {
@@ -163,12 +156,16 @@ export function useDownloadAction({ localFeedback = false } = {}) {
     account: Account,
     app: Software,
     versionId?: string,
+    signal?: AbortSignal,
   ) {
     const ctx = getAccountContext(account, t);
     const appName = app.name;
 
     // Ignore a settings fetch failure, not an explicit size-limit rejection.
-    const settings = await loadDownloadSettings().catch(() => undefined);
+    const settings = await waitFor(loadDownloadSettings(), signal).catch((error) => {
+      throwIfAborted(signal);
+      return undefined;
+    });
     if (settings) {
       if (settings.maxDownloadMB > 0 && app.fileSizeBytes) {
         const sizeMB = parseInt(app.fileSizeBytes, 10) / (1024 * 1024);
@@ -189,12 +186,12 @@ export function useDownloadAction({ localFeedback = false } = {}) {
       }
     }
 
-    const { output, updatedCookies } = await getDownloadInfo(
-      account,
-      app,
-      versionId,
+    const { output } = await recoverAccountOperation(
+      account, app,
+      (current) => getDownloadInfo(current, app, versionId, signal),
+      signal,
     );
-    await updateAccount({ ...account, cookies: updatedCookies });
+    throwIfAborted(signal);
     const hash = await accountHash(account);
 
     await apiPost("/api/downloads", {
@@ -203,11 +200,12 @@ export function useDownloadAction({ localFeedback = false } = {}) {
       downloadURL: output.downloadURL,
       sinfs: output.sinfs,
       bundleVersion: output.bundleVersion,
+      externalVersionId: output.externalVersionId,
       pinnedVersion:
         versionId !== undefined &&
         output.bundleShortVersionString !== app.version,
       iTunesMetadata: output.iTunesMetadata,
-    });
+    }, signal);
 
     fetchTasks();
 
@@ -220,17 +218,23 @@ export function useDownloadAction({ localFeedback = false } = {}) {
     }
   }
 
-  async function acquireLicense(account: Account, app: Software) {
+  async function acquireLicense(account: Account, app: Software, signal?: AbortSignal) {
     const ctx = getAccountContext(account, t);
     const appName = app.name;
 
     // A valid password token can be reused. Renew only when Apple explicitly
     // reports that it expired, avoiding a full signed login on every click.
-    const result = await purchaseWithTokenRefresh(
-      account,
-      app,
-      updateAccount,
-    );
+    const key = `${account.email}:${account.deviceIdentifier}:${account.store}:${app.id}`;
+    let entry = licenseRequests.get(key);
+    const current = latestAccount(account);
+    if (!entry || entry.token !== current.passwordToken || entry.controller.signal.aborted) {
+      entry = { token: current.passwordToken, ...sharedWork((requestSignal) =>
+        accountExchange(current, () => purchaseWithTokenRefresh(current, app, updateAccount, defaultLicenseDependencies, requestSignal), requestSignal)) };
+      const promise = entry.promise;
+      licenseRequests.set(key, entry);
+      promise.finally(() => { if (licenseRequests.get(key)?.promise === promise) licenseRequests.delete(key); }).catch(() => undefined);
+    }
+    const result = await joinWork(entry, signal);
 
     if (result.status === 'alreadyOwned') {
       if (!localFeedback) {
@@ -253,10 +257,10 @@ export function useDownloadAction({ localFeedback = false } = {}) {
     return result;
   }
 
-  async function loadVersions(account: Account, app: Software) {
+  async function loadVersions(account: Account, app: Software, options?: { signal?: AbortSignal; forceRefresh?: boolean }) {
     return listVersionsWithLicense(account, app, acquireLicense, listVersions, {
       renew: authenticate, updateAccount,
-    });
+    }, options);
   }
 
   function toastDownloadError(account: Account, app: Software, error: unknown) {

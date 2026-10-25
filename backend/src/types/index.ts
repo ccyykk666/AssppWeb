@@ -32,6 +32,7 @@ export interface DownloadTask {
   downloadURL: string;
   sinfs: Sinf[];
   bundleVersion?: string;
+  externalVersionId?: string;
   pinnedVersion?: boolean;
   iTunesMetadata?: string;
   status:

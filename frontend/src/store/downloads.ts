@@ -1,6 +1,10 @@
 import { create } from "zustand";
 import type { DownloadTask, Software, Sinf } from "../types";
 import * as downloadsApi from "../api/downloads";
+import { useAccountsStore } from './accounts';
+import { accountHash } from '../utils/account';
+import i18n from '../i18n';
+import type { DownloadOutput } from '../types';
 
 interface DownloadsState {
   tasks: DownloadTask[];
@@ -72,7 +76,23 @@ export const useDownloadsStore = create<DownloadsState>((set, get) => ({
   resumeDownload: async (id) => {
     const task = get().tasks.find((t) => t.id === id);
     if (!task) return;
-    await downloadsApi.resumeDownload(id, task.accountHash);
+    let replacement: DownloadOutput | undefined;
+    if (task.error === 'Download URL expired' && task.externalVersionId) {
+      const [{ getDownloadInfo }, { recoverAccountOperation }] = await Promise.all([
+        import('../apple/download'), import('../apple/accountSession'),
+      ]);
+      const accounts = useAccountsStore.getState().accounts;
+      const hashes = await Promise.all(accounts.map((account) => accountHash(account)));
+      const account = accounts[hashes.indexOf(task.accountHash)];
+      if (!account) throw new Error(i18n.t('errors.messages.networkFailed'));
+      const result = await recoverAccountOperation(account, task.software,
+        (current) => getDownloadInfo(current, task.software, task.externalVersionId));
+      if (result.output.bundleVersion !== task.bundleVersion || result.output.bundleShortVersionString !== task.software.version) {
+        throw new Error(i18n.t('errors.download.mismatchedItem'));
+      }
+      replacement = result.output;
+    }
+    await downloadsApi.resumeDownload(id, task.accountHash, replacement);
     await get().fetchTasks();
   },
 

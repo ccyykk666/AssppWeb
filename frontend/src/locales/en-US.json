@@ -457,6 +457,7 @@
       "networkCode": "Network request failed. Please try again. (Error code: {{code}})",
       "networkFailed": "Unable to connect to the server. Check your connection and try again.",
       "timedOut": "The request timed out. Please try again.",
+      "downloadUrlExpired": "The download URL expired. Resume to obtain a fresh URL.",
       "cancelled": "The request was cancelled.",
       "httpFailed": "The request failed (HTTP {{status}}). Please try again.",
       "appleCode": "Apple returned an error (code: {{code}}).",
